@@ -256,7 +256,28 @@ class SettingsForm:
 			write_settings(pref)						  # save everything
 			if pref['audio_info_on'] == False: audio_info_on = False
 
+class New_Destination_Form:
+	def show(self, clear_all = False):
+		global save_form
+		global waypoints
+
+		fields = [ (u'Latitude', 'number', 0.), (u'Longitude', 'number', 0.),(u'Name', 'text', u''), (u'save', 'combo', ( [u"True", u"False"], 0)) ]
+
+		self.form = appuifw.Form(fields,appuifw.FFormEditModeOnly)
+		self.form.flags = appuifw.FFormEditModeOnly + appuifw.FFormDoubleSpaced
+		self.form.save_hook = settings_form_save
+		save_form = False
+		self.form.execute()
+		if save_form:
+			# delete te current destination
+			if clear_all : waypoints.clear()
+			wp = (self.form[2][2], self.form[0][2],self.form[1][2]);
+			waypoints.append(wp)
+			if self.form[3][2] == 1 : # save in database
+				add_waypoint(wp[0], wp[1], wp[2])
+
 settings_form = SettingsForm()
+new_destination_form = New_Destination_Form()
 
 #############################################################################
 class Track:
@@ -2805,6 +2826,70 @@ def draw_take_photo():
 		canvas.blit(preview_photo,target=(5,yPos))
 
 
+
+def touch_down_destination_cb(pos=(0, 0)):
+	global touch
+	w = (screen_width - 10) # used width
+	wd = 5 # window distance to the border
+	but1 = ((wd, wd), (wd + w, wd + 2 * line_spacing))
+	but2 = ((wd, 2 * wd + 2 * line_spacing ), (wd + w, wd + 4 * line_spacing))
+
+	if pos[1] >= but1[0][1] and pos[1] < but2[0][1]:
+		touch['dest_down'] = 'but1'
+	elif pos[1] >= but1[0][1] and pos[1] < but2[1][1]:
+		touch['dest_down'] = 'but2'
+
+#		appuifw.note(u'I feel touched.' ,"info")
+	pass
+
+def touch_up_destination_cb(pos=(0, 0)):
+	global touch
+	global new_destination_form
+
+	if touch.has_key('dest_down'):
+		if touch['dest_down'] == 'but1':
+			new_destination_form.show(clear_all = True)
+		elif touch['dest_down'] == 'but2':
+			new_destination_form.show(clear_all = False)
+
+		del touch['dest_down']
+
+def draw_destination():
+	global waypoints
+	global location
+	global current_waypoint
+	global touch
+
+	w = (screen_width - 10) # used width
+	wd = 5 # window distance to the border
+
+	but1 = ((wd, wd), (wd + w, wd + 2 * line_spacing))
+	but2 = ((wd, 2 * wd + 2 * line_spacing ), (wd + w, wd + 4 * line_spacing))
+
+	myscreen = Image.new((screen_width,screen_height))
+	myscreen.rectangle(but1,outline=0x000000, width=2)
+	myscreen.rectangle(but2,outline=0x000000, width=2)
+
+	# mark as pressed
+	if touch.has_key('dest_down') :
+		if touch['dest_down'] == 'but1':
+			myscreen.rectangle(but1,outline=0x000000, fill=RGB_LIGHT_BLUE, width=2)
+		elif touch['dest_down'] == 'but2':
+			myscreen.rectangle(but2,outline=0x000000, fill=RGB_LIGHT_BLUE, width=2)
+
+	myscreen.text( ( but1[0][0] + wd , but1[0][1] + line_spacing ) , u'Select new destination ', 0x008000, "normal")
+	myscreen.text( ( but2[0][0] + wd , but2[0][1] + line_spacing ) , u'Use known destination ', 0x008000, "normal")
+
+	#register_drag_mode(canvas)
+	canvas.blit(myscreen) # show the image on the screen
+
+	# bind the tapping areas
+	canvas.bind(key_codes.EButton1Down, touch_down_destination_cb, but1 )
+	canvas.bind(key_codes.EButton1Up, touch_up_destination_cb, but1 )
+
+	canvas.bind(key_codes.EButton1Down, touch_down_destination_cb, but2 )
+	canvas.bind(key_codes.EButton1Up, touch_up_destination_cb, but2 )
+
 # Handle config entry selections
 config_lb = ""
 def config_menu():
@@ -2842,6 +2927,8 @@ def draw_state():
 		draw_track()
 	elif current_state == 'map':
 		draw_map()
+	elif current_state == 'destination':
+		draw_destination()
 	else:
 		draw_main()
 
@@ -2874,6 +2961,11 @@ def pick_take_photo():
 	global current_state
 	current_state = 'take_photo'
 	draw_state()
+def pick_new_destination():
+	global current_state
+	current_state = 'destination'
+	draw_state()
+
 def pick_config():
 	global settings_form
 	global userpref
@@ -2895,7 +2987,6 @@ def do_pick_new_file(def_name):
 	global pref
 	global userpref
 	global log_track
-
 
 	# Get new filename
 	new_name = appuifw.query(u"Basename for new file?", "text", def_name)
@@ -3219,6 +3310,7 @@ appuifw.app.menu=[
 	(u'Direction Of',pick_direction_of),
 	(u'Take Photo',pick_take_photo),
 	(u'Upload',pick_upload), (u'Configuration',pick_config),
+	(u'New Destination', pick_new_destination),
 	(u'New Log File', pick_new_file)]
 
 #############################################################################
