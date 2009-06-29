@@ -260,8 +260,16 @@ class New_Destination_Form:
 	def show(self, clear_all = False):
 		global save_form
 		global waypoints
+		global current_waypoint
 
-		fields = [ (u'Latitude', 'number', 0.), (u'Longitude', 'number', 0.),(u'Name', 'text', u''), (u'save', 'combo', ( [u"True", u"False"], 0)) ]
+		wgs_ll = get_latlong_floats();
+		if wgs_ll:
+			lat = wgs_ll[0]
+			long = wgs_ll[1]
+		else: lat = long = 0.
+
+
+		fields = [ (u'Latitude', 'float', lat), (u'Longitude', 'float', long),(u'Name', 'text', u''), (u'save', 'combo', ( [u"True", u"False"], 0)) ]
 
 		self.form = appuifw.Form(fields,appuifw.FFormEditModeOnly)
 		self.form.flags = appuifw.FFormEditModeOnly + appuifw.FFormDoubleSpaced
@@ -270,11 +278,16 @@ class New_Destination_Form:
 		self.form.execute()
 		if save_form:
 			# delete te current destination
-			if clear_all : waypoints.clear()
+			if clear_all :
+				del waypoints[:]
+
+
 			wp = (self.form[2][2], self.form[0][2],self.form[1][2]);
 			waypoints.append(wp)
+			current_waypoint = len(waypoints) - 1
 			if self.form[3][2] == 1 : # save in database
 				add_waypoint(wp[0], wp[1], wp[2])
+
 
 settings_form = SettingsForm()
 new_destination_form = New_Destination_Form()
@@ -346,6 +359,9 @@ class Track:
 				factor is te scaling factor
 				offset is the offset in screen coordinates
 		"""
+
+		if factor == 0. : return
+
 		tmpfactor = factor / self.factor # reverse last scaling and rescale in one step
 
 		if tmpfactor == 1. and self.offset == offset and self.xymin == xymin:
@@ -392,14 +408,28 @@ if not userpref['audio_info_on'] or active_profile in ['silent','meeting']:
 # touch events
 touch = {}
 buttons = {}
-try:
-	buttons['track_shortest_distance'] = Image.open(userpref['base_dir'] + "img\\but_shortest_distance.png")
-except:
-	buttons['track_shortest_distance'] = None
-try:
-	buttons['track_shortest_distance_down'] = Image.open(userpref['base_dir'] + "img\\but_shortest_distance_down.png")
-except:
-	buttons['track_shortest_distance_down'] = None
+try:	buttons['track_shortest_distance'] = Image.open(userpref['base_dir'] + "img\\but_shortest_distance.png")
+except:	buttons['track_shortest_distance'] = None
+try:	buttons['track_shortest_distance_down'] = Image.open(userpref['base_dir'] + "img\\but_shortest_distance_down.png")
+except:	buttons['track_shortest_distance_down'] = None
+
+try:	buttons['destination_down'] = Image.open(userpref['base_dir'] + "img\\bike_down.png")
+except:	buttons['destination_down'] = None
+
+try:	buttons['destination'] = Image.open(userpref['base_dir'] + "img\\bike.png")
+except:	buttons['destination'] = None
+
+try:	buttons['pen_down'] = Image.open(userpref['base_dir'] + "img\\pen_down.png")
+except:	buttons['pen_down'] = None
+
+try:	buttons['pen'] = Image.open(userpref['base_dir'] + "img\\pen.png")
+except:	buttons['pen'] = None
+
+try: 	buttons['locked'] = Image.open(userpref['base_dir'] + "img\\locked.png")
+except:	buttons['locked'] = None
+
+try: 	buttons['locked_down'] = Image.open(userpref['base_dir'] + "img\\unlocked.png")
+except:	buttons['locked_down'] = None
 
 RGB_MIN = 0
 RGB_MAX = 255
@@ -1923,12 +1953,48 @@ def register_drag_mode(canvas):
 	canvas.bind(key_codes.EButton1Up, main_touch_up_cb)
 	canvas.bind(key_codes.EDrag, drag_callback)
 
-def render_rectangle(tl_x,tl_y,br_x,br_y, outline=0x000000, width=1):
-	"""Draw a normal rectangle"""
-	canvas.line([tl_x,tl_y,br_x,tl_y], outline=outline, width=width)
-	canvas.line([tl_x,br_y,br_x,br_y], outline=outline, width=width)
-	canvas.line([tl_x,tl_y,tl_x,br_y], outline=outline, width=width)
-	canvas.line([br_x,tl_y,br_x,br_y], outline=outline, width=width)
+def touched_on_button(pos, button):
+
+	print pos
+	print button
+
+	if  pos[0] >= button[0][0] and pos[0] <  button[1][0]\
+	and pos[1] >= button[0][1] and pos[1] <  button[1][1]:
+		return True
+
+	return False
+
+def touch_down_main_cb(pos=(0, 0)):
+	global touch
+	br = screen_height - 45
+	lock_pos = screen_width - 45
+	wd = 5
+	but1 = (( wd  ,br), (wd + 40, br + 40 ))
+	but2 = (( wd + 1 * (wd + 40) ,br), (wd + 1 * (wd + 40) + 40, br + 40 ))
+	but3 = (( lock_pos ,br), (lock_pos + 40, br + 40 ))
+
+	if touched_on_button(pos, but1) :
+		touch['main_down'] = 'but1'
+	elif touched_on_button(pos, but2) :
+		touch['main_down'] = 'but2'
+	elif touched_on_button(pos, but3) :
+		touch['main_down'] = 'but3'
+
+	#if touch.has_key('main_down'):
+		#appuifw.note(u'I feel touched at %s.' % touch['main_down'] ,"info")
+
+def touch_up_main_cb(pos=(0, 0)):
+	global touch
+
+	if touch.has_key('main_down'):
+		if touch['main_down'] == 'but1':
+			pass
+		elif touch['main_down'] == 'but2':
+			pass
+		elif touch['main_down'] == 'but3':
+			pass
+
+		del touch['main_down']
 
 def draw_main():
 	global location
@@ -1938,14 +2004,42 @@ def draw_main():
 	global log_interval
 	global disp_notices
 	global disp_notices_count
+	global touch
 
-	canvas.clear()
+	#canvas.clear()
 	register_drag_mode(canvas)
+
+	myscreen = Image.new((screen_width,screen_height))
 
 	# Draw the top box
 	top_box_right = screen_width-10
 	top_box_bottom = (line_spacing*2) + 4
-	render_rectangle(10,2,top_box_right,top_box_bottom)
+	rect0 = ( (10,2),(top_box_right,top_box_bottom))
+	myscreen.rectangle(rect0,outline=0x000000, width=1)
+
+	br = screen_height - 45
+	lock_pos = screen_width - 45
+	wd = 5
+
+	but1 = (( wd  ,br), (wd + 40, br + 40 ))
+	but2 = (( wd + 1 * (wd + 40) ,br), (wd + 1 * (wd + 40) + 40, br + 40 ))
+	but3 = (( lock_pos ,br), (lock_pos + 40, br + 40 ))
+
+	myscreen.rectangle(but1,outline=0x000000, width=2)
+	myscreen.rectangle(but2,outline=0x000000, width=2)
+	myscreen.rectangle(but3,outline=0x000000, width=2)
+
+	def blit_button(name, xpos):
+		if touch.has_key('main_down') and touch['main_down'] == name:
+			name += '_down'
+			print touch['main_down'] , " is down"
+
+		if buttons[name]:
+			myscreen.blit(buttons[name], target = xpos ) #, scale = 2)
+
+	blit_button('destination', 	but1[0])
+	blit_button('pen', 			but2[0])
+	blit_button('locked', 		but3[0])
 
 	# Draw the two boxes below
 	mid = int(screen_width/2)
@@ -1955,14 +2049,16 @@ def draw_main():
 	right_box_bottom = (line_spacing*11)
 	right_box_right = screen_width-10
 
-	render_rectangle(10,left_box_top,(mid-10),left_box_bottom)
-	render_rectangle((mid+10),right_box_top,right_box_right,right_box_bottom)
+	rect1 = ( (10,left_box_top)     , (mid-10,left_box_bottom) )
+	rect2 = ( (mid+10,right_box_top), (right_box_right,right_box_bottom) )
+	myscreen.rectangle(rect1,outline=0x000000, width=1)
+	myscreen.rectangle(rect2,outline=0x000000, width=1)
 
 	# Draw the heading circle
 	heading_centre_r = int(screen_width/4.0*3.0)
 	heading_centre_t = int(line_spacing*4.25)
 	heading_radius = int(line_spacing*1.5)
-	canvas.ellipse([heading_centre_r-heading_radius,heading_centre_t-heading_radius,heading_centre_r+heading_radius,heading_centre_t+heading_radius], outline=0x000000, width=1)
+	myscreen.ellipse([heading_centre_r-heading_radius,heading_centre_t-heading_radius,heading_centre_r+heading_radius,heading_centre_t+heading_radius], outline=0x000000, width=1)
 
 	# If we're connected, show the location at the top
 	# Otherwise, show waiting
@@ -1973,17 +2069,17 @@ def draw_main():
 	if gps.connected:
 
 		if (location['valid'] == 0) or (not location.has_key('lat')) or (not location.has_key('long')):
-			canvas.text( (indent_box, yPos), u'(invalid location)', 0x008000, bigger_font )
+			myscreen.text( (indent_box, yPos), u'(invalid location)', 0x008000, bigger_font )
 		else:
-			canvas.text( (indent_box, yPos), u'Latitude', 0x008000, font="normal" )
-			canvas.text( (indent_box, yPos+line_spacing),	u'Longitude', 0x008000, font="normal" )
+			myscreen.text( (indent_box, yPos), u'Latitude', 0x008000, font="normal" )
+			myscreen.text( (indent_box, yPos+line_spacing),	u'Longitude', 0x008000, font="normal" )
 
-			canvas.text( (indent_box_2, yPos), unicode(location['lat']), font="normal" )
-			canvas.text( (indent_box_2, yPos+line_spacing),	unicode(location['long']), font="normal" )
+			myscreen.text( (indent_box_2, yPos), unicode(location['lat']), font="normal" )
+			myscreen.text( (indent_box_2, yPos+line_spacing),	unicode(location['long']), font="normal" )
 
 	else:
-		canvas.text( (indent_box,yPos), u"-waiting for gps-", 0xdd0000, font)
-		canvas.text( (indent_box,yPos+line_spacing), unicode(str(gps)), 0xdd0000, font)
+		myscreen.text( (indent_box,yPos), u"-waiting for gps-", 0xdd0000, font)
+		myscreen.text( (indent_box,yPos+line_spacing), unicode(str(gps)), 0xdd0000, font)
 
 	# Heading circle
 	#if motion.has_key('true_heading'):
@@ -2000,14 +2096,14 @@ def draw_main():
 			arrow_r = (direction[0], direction[1], arrow_r[0], arrow_r[1] )
 
 
-			canvas.line( direction, outline=0x008000, width=2)
-			canvas.line( arrow_l, outline=0x008000, width=2)
-			canvas.line( arrow_r, outline=0x008000, width=2)
+			myscreen.line( direction, outline=0x008000, width=2)
+			myscreen.line( arrow_l, outline=0x008000, width=2)
+			myscreen.line( arrow_r, outline=0x008000, width=2)
 
-			canvas.text( (heading_centre_r - 30 ,heading_centre_t-small_line_spacing) , u'%s' % info['distance_human'], 0x008000, font)
-			canvas.text( (heading_centre_r ,heading_centre_t - heading_radius) , u'N' , 0x008000, font)
+			myscreen.text( (heading_centre_r - 30 ,heading_centre_t-small_line_spacing) , u'%s' % info['distance_human'], 0x008000, font)
+			myscreen.text( (heading_centre_r ,heading_centre_t - heading_radius) , u'N' , 0x008000, font)
 	else:
-		canvas.text( (heading_centre_r,heading_centre_t), u'?', 0x008000, font)
+		myscreen.text( (heading_centre_r,heading_centre_t), u'?', 0x008000, font)
 
 	# Left box:
 	#	time, date, sats, used, logging
@@ -2018,52 +2114,52 @@ def draw_main():
 		cur_time = location['time']
 		if cur_time[-4:] == ' UTC':
 			cur_time = cur_time[:-4]
-	canvas.text( (13,yPos), unicode(cur_time), font=font )
+	myscreen.text( (13,yPos), unicode(cur_time), font=font )
 
 	yPos += line_spacing
 	if not location.has_key('date'):
 		cur_date = u'(no date)'
 	else:
 		cur_date = location['date']
-	canvas.text( (13,yPos), unicode(cur_date), font=font )
+	myscreen.text( (13,yPos), unicode(cur_date), font=font )
 
 	yPos += int(line_spacing*0.5)
 	sPos = mid - 1.5 * line_spacing
 
 	yPos += line_spacing
-	canvas.text( (13, yPos), u'Sats', 0x008000, font)
+	myscreen.text( (13, yPos), u'Sats', 0x008000, font)
 	if satellites.has_key('in_view'):
 		sat_text = len(satellites['in_view'])
 	else:
 		sat_text = '(u)'
-	canvas.text( (sPos, yPos), unicode(sat_text), font=font )
+	myscreen.text( (sPos, yPos), unicode(sat_text), font=font )
 
 	yPos += line_spacing
-	canvas.text( (13, yPos), u'Used', 0x008000, font)
+	myscreen.text( (13, yPos), u'Used', 0x008000, font)
 	if satellites.has_key('in_use'):
 		sat_text = len(satellites['in_use'])
 	else:
 		sat_text = '(u)'
-	canvas.text( (sPos, yPos), unicode(sat_text), font=font )
+	myscreen.text( (sPos, yPos), unicode(sat_text), font=font )
 
 	yPos += int(line_spacing*0.5)
 
 	yPos += line_spacing
 	if log_interval > 0:
-		canvas.text( (13, yPos), u'Logging', 0x008000, font)
+		myscreen.text( (13, yPos), u'Logging', 0x008000, font)
 
 		yPos += line_spacing
 		logging = unicode(log_interval) + u' secs'
 		if pref['gsmloc_logging']:
 			logging = logging + u' +GSM'
-		canvas.text( (13,yPos), logging, font=font)
+		myscreen.text( (13,yPos), logging, font=font)
 	else:
-		canvas.text( (13, yPos), u'No Logging', 0x008000, font)
+		myscreen.text( (13, yPos), u'No Logging', 0x008000, font)
 
 	# Right box:
 	#   speed, heading, altitude?
 	yPos = right_box_top + line_spacing + 4
-	canvas.text( (mid+13,yPos), u'Speed', 0x008000, font)
+	myscreen.text( (mid+13,yPos), u'Speed', 0x008000, font)
 	if motion.has_key('speed_mph'):
 		if userpref['imperial_speeds']:
 			cur_speed = "%0.1f mph" % motion['speed_mph']
@@ -2073,36 +2169,47 @@ def draw_main():
 	else:
 		cur_speed = u'(no speed)'
 	yPos += small_line_spacing
-	canvas.text( (mid+13,yPos), cur_speed, font=font)
+	myscreen.text( (mid+13,yPos), cur_speed, font=font)
 
 	if info.has_key('speed_avg') and info['speed_avg'].items > 0:
 		cur_speed2 = u"avg : %0.1f kmph" % (info['speed_avg'].mean() * 3.6 )
 	else:
 		cur_speed2 = u'avg : (no speed)'
-	canvas.text( (mid+13,yPos+small_line_spacing), cur_speed2, font=font)
+	myscreen.text( (mid+13,yPos+small_line_spacing), cur_speed2, font=font)
 
 	yPos += 1.5 * line_spacing
-	canvas.text( (mid+13,yPos), u'Heading', 0x008000, font)
+	myscreen.text( (mid+13,yPos), u'Heading', 0x008000, font)
 	if motion.has_key('true_heading'):
 		mag = "%s deg" % motion['true_heading']
 		mag = unicode(mag)
 	else:
 		mag = u'(no heading)'
 	yPos += line_spacing
-	canvas.text( (mid+13,yPos), mag, font=font)
+	myscreen.text( (mid+13,yPos), mag, font=font)
 
 	if info.has_key('avg_heading') and info['avg_heading'] != None:
-		canvas.text( (mid+13,yPos+ small_line_spacing), u'%3d' % int(info['avg_heading']), font=font)
+		myscreen.text( (mid+13,yPos+ small_line_spacing), u'%3d' % int(info['avg_heading']), font=font)
 	else:
-		canvas.text( (mid+13,yPos+ small_line_spacing), u'(no heading)', font=font)
+		myscreen.text( (mid+13,yPos+ small_line_spacing), u'(no heading)', font=font)
 
 	if not disp_notices == '':
 		yPos = left_box_bottom + line_spacing
-		canvas.text( (0,yPos), unicode(disp_notices), 0x000080, font)
+		myscreen.text( (0,yPos), unicode(disp_notices), 0x000080, font)
 		disp_notices_count = disp_notices_count + 1
 		if disp_notices_count > 60:
 			disp_notices = ''
 			disp_notices_count = 0
+	canvas.blit(myscreen) # show the image on the screen
+
+	# bind the tapping areas
+	canvas.bind(key_codes.EButton1Down, touch_down_main_cb, but1 )
+	canvas.bind(key_codes.EButton1Up, touch_up_main_cb, but1 )
+
+	canvas.bind(key_codes.EButton1Down, touch_down_main_cb, but2 )
+	canvas.bind(key_codes.EButton1Up, touch_up_main_cb, but2 )
+
+	canvas.bind(key_codes.EButton1Down, touch_down_main_cb, but3 )
+	canvas.bind(key_codes.EButton1Up, touch_up_main_cb, but3 )
 
 def draw_details():
 	global location
@@ -2833,23 +2940,36 @@ def touch_down_destination_cb(pos=(0, 0)):
 	wd = 5 # window distance to the border
 	but1 = ((wd, wd), (wd + w, wd + 2 * line_spacing))
 	but2 = ((wd, 2 * wd + 2 * line_spacing ), (wd + w, wd + 4 * line_spacing))
+	but3 = ((wd, 2 * wd + 4 * line_spacing ), (wd + w, wd + 6 * line_spacing))
 
-	if pos[1] >= but1[0][1] and pos[1] < but2[0][1]:
+	if pos[1] >= but1[0][1] and pos[1] < but1[1][1]:
 		touch['dest_down'] = 'but1'
-	elif pos[1] >= but1[0][1] and pos[1] < but2[1][1]:
+	elif pos[1] >= but2[0][1] and pos[1] < but2[1][1]:
 		touch['dest_down'] = 'but2'
+	elif pos[1] >= but3[0][1] and pos[1] < but3[1][1]:
+		touch['dest_down'] = 'but3'
 
-#		appuifw.note(u'I feel touched.' ,"info")
-	pass
 
 def touch_up_destination_cb(pos=(0, 0)):
 	global touch
 	global new_destination_form
+	global current_waypoint
 
 	if touch.has_key('dest_down'):
 		if touch['dest_down'] == 'but1':
 			new_destination_form.show(clear_all = True)
 		elif touch['dest_down'] == 'but2':
+			#i=appuifw.multi_selection_list([u"Item1", u"Item2"], style='checkbox', search_field=1)
+			list = []
+			for i in range(len(waypoints)):
+				if waypoints[i][0] != "":
+					list.append(unicode(waypoints[i][0]))
+				else:
+					list.append(u"Waypoint %d" % i)
+			i=appuifw.selection_list(list, search_field=1)
+			current_waypoint = i # set the waypoint
+
+		elif touch['dest_down'] == 'but3':
 			new_destination_form.show(clear_all = False)
 
 		del touch['dest_down']
@@ -2865,10 +2985,12 @@ def draw_destination():
 
 	but1 = ((wd, wd), (wd + w, wd + 2 * line_spacing))
 	but2 = ((wd, 2 * wd + 2 * line_spacing ), (wd + w, wd + 4 * line_spacing))
+	but3 = ((wd, 2 * wd + 4 * line_spacing ), (wd + w, wd + 6 * line_spacing))
 
 	myscreen = Image.new((screen_width,screen_height))
 	myscreen.rectangle(but1,outline=0x000000, width=2)
 	myscreen.rectangle(but2,outline=0x000000, width=2)
+	myscreen.rectangle(but3,outline=0x000000, width=2)
 
 	# mark as pressed
 	if touch.has_key('dest_down') :
@@ -2876,9 +2998,12 @@ def draw_destination():
 			myscreen.rectangle(but1,outline=0x000000, fill=RGB_LIGHT_BLUE, width=2)
 		elif touch['dest_down'] == 'but2':
 			myscreen.rectangle(but2,outline=0x000000, fill=RGB_LIGHT_BLUE, width=2)
+		elif touch['dest_down'] == 'but3':
+			myscreen.rectangle(but3,outline=0x000000, fill=RGB_LIGHT_BLUE, width=2)
 
 	myscreen.text( ( but1[0][0] + wd , but1[0][1] + line_spacing ) , u'Select new destination ', 0x008000, "normal")
 	myscreen.text( ( but2[0][0] + wd , but2[0][1] + line_spacing ) , u'Use known destination ', 0x008000, "normal")
+	myscreen.text( ( but3[0][0] + wd , but3[0][1] + line_spacing ) , u'Add waypoint', 0x008000, "normal")
 
 	#register_drag_mode(canvas)
 	canvas.blit(myscreen) # show the image on the screen
@@ -2889,6 +3014,9 @@ def draw_destination():
 
 	canvas.bind(key_codes.EButton1Down, touch_down_destination_cb, but2 )
 	canvas.bind(key_codes.EButton1Up, touch_up_destination_cb, but2 )
+
+	canvas.bind(key_codes.EButton1Down, touch_down_destination_cb, but3 )
+	canvas.bind(key_codes.EButton1Up, touch_up_destination_cb, but3 )
 
 # Handle config entry selections
 config_lb = ""
