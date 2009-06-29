@@ -285,7 +285,9 @@ class New_Destination_Form:
 			wp = (self.form[2][2], self.form[0][2],self.form[1][2]);
 			waypoints.append(wp)
 			current_waypoint = len(waypoints) - 1
-			if self.form[3][2] == 1 : # save in database
+			print self.form[3]
+			if self.form[3][2][1] == 0 : # save in database
+				print "Saving waypoint ", wp[0]
 				add_waypoint(wp[0], wp[1], wp[2])
 
 
@@ -1055,11 +1057,11 @@ def delete_current_waypoint():
 	db.execute( unicode(sql) )
 	db.close()
 
-def load_waypoints_db():
+def load_destination_db():
 	"""Loads our direction-of waypoints"""
 	global waypoints
 	global current_waypoint
-
+	list = []
 	# Now load from disk
 	db = open_waypoints_db()
 	dbv = e32db.Db_view()
@@ -1067,9 +1069,12 @@ def load_waypoints_db():
 	dbv.first_line()
 	for i in range(dbv.count_line()):
 		dbv.get_line()
-		waypoints.append( (dbv.col(1), dbv.col(2), dbv.col(3)) )
+		list.append( (dbv.col(1), dbv.col(2), dbv.col(3)) )
 		dbv.next_line()
 	db.close()
+
+	return list
+
 
 
 def import_gpx_track():
@@ -1110,7 +1115,7 @@ def import_gpx_track():
 			if pref['use_db']:
 				add_waypoint(desc, lat, lon)
 			waypoints.append( (desc,lat,lon) )
-			#waypoints.append( (desc, lat, lon) )
+
 	del lines
 	current_waypoint = 0
 	appuifw.note(u'Gpx track imported : %d waypoints.'% (len(waypoints)),"info")
@@ -1147,7 +1152,7 @@ def import_gpx_track():
 	#file.close()
 
 # Load our direction-of waypoints
-if not import_gpx_track(): load_waypoints_db()
+if not import_gpx_track(): appuifw.note(u"Could not load track", "error")
 waypoints_xy = Track(waypoints)
 
 #############################################################################
@@ -1955,9 +1960,6 @@ def register_drag_mode(canvas):
 
 def touched_on_button(pos, button):
 
-	print pos
-	print button
-
 	if  pos[0] >= button[0][0] and pos[0] <  button[1][0]\
 	and pos[1] >= button[0][1] and pos[1] <  button[1][1]:
 		return True
@@ -1974,24 +1976,27 @@ def touch_down_main_cb(pos=(0, 0)):
 	but3 = (( lock_pos ,br), (lock_pos + 40, br + 40 ))
 
 	if touched_on_button(pos, but1) :
-		touch['main_down'] = 'but1'
+		touch['main_down'] = 'destination'
 	elif touched_on_button(pos, but2) :
-		touch['main_down'] = 'but2'
+		touch['main_down'] = 'pen'
 	elif touched_on_button(pos, but3) :
-		touch['main_down'] = 'but3'
+		touch['main_down'] = 'locked'
 
 	#if touch.has_key('main_down'):
 		#appuifw.note(u'I feel touched at %s.' % touch['main_down'] ,"info")
 
 def touch_up_main_cb(pos=(0, 0)):
 	global touch
+	global current_state
 
 	if touch.has_key('main_down'):
-		if touch['main_down'] == 'but1':
+		if touch['main_down'] == 'destination':
+			global current_state
+			current_state = 'destination'
+			draw_state()
+		elif touch['main_down'] == 'pen':
 			pass
-		elif touch['main_down'] == 'but2':
-			pass
-		elif touch['main_down'] == 'but3':
+		elif touch['main_down'] == 'locked':
 			pass
 
 		del touch['main_down']
@@ -2032,7 +2037,6 @@ def draw_main():
 	def blit_button(name, xpos):
 		if touch.has_key('main_down') and touch['main_down'] == name:
 			name += '_down'
-			print touch['main_down'] , " is down"
 
 		if buttons[name]:
 			myscreen.blit(buttons[name], target = xpos ) #, scale = 2)
@@ -2583,29 +2587,29 @@ def draw_map():
 	yfactor = (ymax - ymin) / float(screen_height)
 
 	#print xfactor, yfactor
+	if xfactor and yfactor:
+		for i in range(len(coords)):
 
-	for i in range(len(coords)):
+			coords[i][0] -= (xmin)
+			coords[i][1] -= (ymin)
 
-		coords[i][0] -= (xmin)
-		coords[i][1] -= (ymin)
+			coords[i][0] /= xfactor
+			coords[i][1] /= yfactor
 
-		coords[i][0] /= xfactor
-		coords[i][1] /= yfactor
+			coords[i][0] = int(coords[i][0])
+			coords[i][1] = int(coords[i][1])
 
-		coords[i][0] = int(coords[i][0])
-		coords[i][1] = int(coords[i][1])
+		if own_position:
+			own_position[0] -= (xmin)
+			own_position[1] -= (ymin)
 
-	if own_position:
-		own_position[0] -= (xmin)
-		own_position[1] -= (ymin)
+			own_position[0] /= xfactor
+			own_position[1] /= yfactor
 
-		own_position[0] /= xfactor
-		own_position[1] /= yfactor
+			own_position[0] = int(own_position[0])
+			own_position[1] = int(own_position[1])
 
-		own_position[0] = int(own_position[0])
-		own_position[1] = int(own_position[1])
-
-		canvas.point([own_position[0], own_position[1]], outline=0xAA0000, width=10)
+			canvas.point([own_position[0], own_position[1]], outline=0xAA0000, width=10)
 
 	# plot the track
 	for i in range(len(coords)-1):
@@ -2960,14 +2964,17 @@ def touch_up_destination_cb(pos=(0, 0)):
 			new_destination_form.show(clear_all = True)
 		elif touch['dest_down'] == 'but2':
 			#i=appuifw.multi_selection_list([u"Item1", u"Item2"], style='checkbox', search_field=1)
-			list = []
-			for i in range(len(waypoints)):
-				if waypoints[i][0] != "":
-					list.append(unicode(waypoints[i][0]))
+			list = load_destination_db()
+			sel = []
+			for i in range(len(list)):
+				if list[i][0] != "":
+					sel.append(unicode(list[i][0]))
 				else:
-					list.append(u"Waypoint %d" % i)
-			i=appuifw.selection_list(list, search_field=1)
-			current_waypoint = i # set the waypoint
+					sel.append(u"Waypoint %d" % i)
+			i=appuifw.selection_list(sel, search_field=1)
+			if i:
+				waypoints.append(list[i])
+				current_waypoint = len(waypoints) - 1 # set the waypoint
 
 		elif touch['dest_down'] == 'but3':
 			new_destination_form.show(clear_all = False)
@@ -3088,10 +3095,6 @@ def pick_direction_of():
 def pick_take_photo():
 	global current_state
 	current_state = 'take_photo'
-	draw_state()
-def pick_new_destination():
-	global current_state
-	current_state = 'destination'
 	draw_state()
 
 def pick_config():
@@ -3438,7 +3441,6 @@ appuifw.app.menu=[
 	(u'Direction Of',pick_direction_of),
 	(u'Take Photo',pick_take_photo),
 	(u'Upload',pick_upload), (u'Configuration',pick_config),
-	(u'New Destination', pick_new_destination),
 	(u'New Log File', pick_new_file)]
 
 #############################################################################
