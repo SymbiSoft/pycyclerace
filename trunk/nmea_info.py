@@ -2996,12 +2996,10 @@ def touch_up_destination_cb(pos=(0, 0)):
 				else:
 					sel.append(u"Waypoint %d" % i)
 			i=appuifw.selection_list(sel, search_field=1)
-			if i:
-				appuifw.note(u"Chosen %d" % i , "info")
+			if i != None:
 				waypoints.append(list[i])
 				current_waypoint = len(waypoints) - 1 # set the waypoint
 			del list
-
 		elif touch['dest_down'] == 'but3':
 			new_destination_form.show(clear_all = False)
 
