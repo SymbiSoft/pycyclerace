@@ -254,7 +254,7 @@ class SettingsForm:
 					else : 				value = True
 				if value != pref[key]: 	pref[key] = value # set the new value if different
 			write_settings(pref)						  # save everything
-			if pref['audio_info_on'] == False: audio_info_on = False
+			audio_info_on = pref['audio_info_on']
 
 class New_Destination_Form:
 	def show(self, clear_all = False):
@@ -278,9 +278,7 @@ class New_Destination_Form:
 		self.form.execute()
 		if save_form:
 			# delete te current destination
-			if clear_all :
-				del waypoints[:]
-
+			if clear_all : del waypoints[:]
 
 			wp = (self.form[2][2], self.form[0][2],self.form[1][2]);
 			waypoints.append(wp)
@@ -417,21 +415,28 @@ except:	buttons['track_shortest_distance_down'] = None
 
 try:	buttons['destination_down'] = Image.open(userpref['base_dir'] + "img\\bike_down.png")
 except:	buttons['destination_down'] = None
-
 try:	buttons['destination'] = Image.open(userpref['base_dir'] + "img\\bike.png")
 except:	buttons['destination'] = None
 
 try:	buttons['pen_down'] = Image.open(userpref['base_dir'] + "img\\pen_down.png")
 except:	buttons['pen_down'] = None
-
 try:	buttons['pen'] = Image.open(userpref['base_dir'] + "img\\pen.png")
 except:	buttons['pen'] = None
 
 try: 	buttons['locked'] = Image.open(userpref['base_dir'] + "img\\locked.png")
 except:	buttons['locked'] = None
-
 try: 	buttons['locked_down'] = Image.open(userpref['base_dir'] + "img\\unlocked.png")
 except:	buttons['locked_down'] = None
+
+try: 	buttons['sound'] = Image.open(userpref['base_dir'] + "img\\sound.png")
+except:	buttons['sound'] = None
+try: 	buttons['sound_down'] = Image.open(userpref['base_dir'] + "img\\sound_down.png")
+except:	buttons['sound_down'] = None
+
+try: 	buttons['sound_off'] = Image.open(userpref['base_dir'] + "img\\sound_off.png")
+except:	buttons['sound_off'] = None
+try: 	buttons['sound_off_down'] = Image.open(userpref['base_dir'] + "img\\sound_off_down.png")
+except:	buttons['sound_off_down'] = None
 
 RGB_MIN = 0
 RGB_MAX = 255
@@ -1968,12 +1973,14 @@ def touched_on_button(pos, button):
 
 def touch_down_main_cb(pos=(0, 0)):
 	global touch
+	global audio_info_on
 	br = screen_height - 45
 	lock_pos = screen_width - 45
 	wd = 5
 	but1 = (( wd  ,br), (wd + 40, br + 40 ))
 	but2 = (( wd + 1 * (wd + 40) ,br), (wd + 1 * (wd + 40) + 40, br + 40 ))
 	but3 = (( lock_pos ,br), (lock_pos + 40, br + 40 ))
+	but4 = (( lock_pos - 45 ,br), (lock_pos -5, br + 40 ))
 
 	if touched_on_button(pos, but1) :
 		touch['main_down'] = 'destination'
@@ -1981,6 +1988,11 @@ def touch_down_main_cb(pos=(0, 0)):
 		touch['main_down'] = 'pen'
 	elif touched_on_button(pos, but3) :
 		touch['main_down'] = 'locked'
+	elif touched_on_button(pos, but4):
+		if audio_info_on:
+			touch['main_down'] = 'sound'
+		else:
+			touch['main_down'] = 'sound_off'
 
 	#if touch.has_key('main_down'):
 		#appuifw.note(u'I feel touched at %s.' % touch['main_down'] ,"info")
@@ -1988,6 +2000,7 @@ def touch_down_main_cb(pos=(0, 0)):
 def touch_up_main_cb(pos=(0, 0)):
 	global touch
 	global current_state
+	global audio_info_on
 
 	if touch.has_key('main_down'):
 		if touch['main_down'] == 'destination':
@@ -1998,6 +2011,8 @@ def touch_up_main_cb(pos=(0, 0)):
 			pass
 		elif touch['main_down'] == 'locked':
 			pass
+		elif touch['main_down'].startswith('sound'):
+			audio_info_on = not audio_info_on
 
 		del touch['main_down']
 
@@ -2029,10 +2044,12 @@ def draw_main():
 	but1 = (( wd  ,br), (wd + 40, br + 40 ))
 	but2 = (( wd + 1 * (wd + 40) ,br), (wd + 1 * (wd + 40) + 40, br + 40 ))
 	but3 = (( lock_pos ,br), (lock_pos + 40, br + 40 ))
+	but4 = (( lock_pos - 45 ,br), (lock_pos -5, br + 40 ))
 
 	myscreen.rectangle(but1,outline=0x000000, width=2)
 	myscreen.rectangle(but2,outline=0x000000, width=2)
 	myscreen.rectangle(but3,outline=0x000000, width=2)
+	myscreen.rectangle(but4,outline=0x000000, width=2)
 
 	def blit_button(name, xpos):
 		if touch.has_key('main_down') and touch['main_down'] == name:
@@ -2044,6 +2061,9 @@ def draw_main():
 	blit_button('destination', 	but1[0])
 	blit_button('pen', 			but2[0])
 	blit_button('locked', 		but3[0])
+	if audio_info_on: snd = 'sound'
+	else: snd = 'sound_off'
+	blit_button(snd, 			but4[0])
 
 	# Draw the two boxes below
 	mid = int(screen_width/2)
@@ -2214,6 +2234,9 @@ def draw_main():
 
 	canvas.bind(key_codes.EButton1Down, touch_down_main_cb, but3 )
 	canvas.bind(key_codes.EButton1Up, touch_up_main_cb, but3 )
+
+	canvas.bind(key_codes.EButton1Down, touch_down_main_cb, but4 )
+	canvas.bind(key_codes.EButton1Up, touch_up_main_cb, but4 )
 
 def draw_details():
 	global location
@@ -2958,11 +2981,12 @@ def touch_up_destination_cb(pos=(0, 0)):
 	global touch
 	global new_destination_form
 	global current_waypoint
+	global waypoints
 
 	if touch.has_key('dest_down'):
 		if touch['dest_down'] == 'but1':
 			new_destination_form.show(clear_all = True)
-		elif touch['dest_down'] == 'but2':
+		elif touch['dest_down'] == 'but2': # select a waypoint
 			#i=appuifw.multi_selection_list([u"Item1", u"Item2"], style='checkbox', search_field=1)
 			list = load_destination_db()
 			sel = []
@@ -2973,8 +2997,10 @@ def touch_up_destination_cb(pos=(0, 0)):
 					sel.append(u"Waypoint %d" % i)
 			i=appuifw.selection_list(sel, search_field=1)
 			if i:
+				appuifw.note(u"Chosen %d" % i , "info")
 				waypoints.append(list[i])
 				current_waypoint = len(waypoints) - 1 # set the waypoint
+			del list
 
 		elif touch['dest_down'] == 'but3':
 			new_destination_form.show(clear_all = False)
