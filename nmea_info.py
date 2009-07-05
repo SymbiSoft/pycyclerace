@@ -4,33 +4,16 @@
 __doc__ = """
 Graphical python script to talk to a GPS, and display all sorts
  of useful information from it. Can talk to a NMEA Bluetooth GPS,
- or an internal GPS on a 3rd Edition Phone.
+ or an internal GPS on a 5th Edition Phone.
 
-Series 60 v3 / 3rd Edition Users:
- You need to be running Python 1.3.22 or later, owing to a bug
-  with fonts in earlier versions. Ideally, use 1.4.0 or later.
- If you want to use the Location API, rather than bluetooth (eg to
-  acess the internal GPS), you must have installed LocationRequestor
-  (<http://discussion.forum.nokia.com/forum/showpost.php?p=311182> or
-  <http://www.iyouit.eu/portal/Software.aspx> or
-  <http://gagravarr.org/code/locationrequestor_3rd_opensign.sis>)
-  and signed all the related .sis files (this, python and
-  LocationRequestor) with your devcert, or using open signed online.
+ Also allows you to log your journeys to a simple  csv file.
 
-Shows where the satellites are in the sky, and what signal strength
- they have (two different views)
-Converts your position into OSGB 36 values, and then generates OS
- easting and northing values + six figure grid ref
-Also allows you to log your journeys to a file. In future, the logging
- details will be configurable, and you'll be able send this to another
- bluetooth device (eg a computer), but for now this functionality is
- handled by upload_track.py.
 Optionally also logs the GSM location to the file used by stumblestore,
  which you can later uplaod with stumblestore to http://gsmloc.org/
 Can take photos which have the exif GPS tags, which indicate where and
  when they were taken.
+ Both is not tested.
 
-In future, should have a config pannel
 In future, the OS co-ords stuff should be made more general, to handle
  other countries
 In future, some of the messages out to be translated into other languages
@@ -50,13 +33,11 @@ GPL
 
 Nick Burch - v0.28 (04/05/2008)
 """
-
 # Core imports - special ones occur later
 import appuifw
 import e32
 import e32db
 import math
-#import socket
 import time
 import os
 import sysinfo
@@ -70,12 +51,12 @@ from graphics import *
 ######################### settings ##########################################
 
 # All of our preferences live in a dictionary called 'pref'
-pref = {} # general settings
-userpref = {} # settings free to change by the users
-log_track = None # log_file for racking the user's way
-audio_info_on = True # if the speaker is eanbled
-waypoints_xy = None		 # saves the current track as (x,y) coords
-track_xy = None			 # saves the locations the users has passed
+pref = {} 			# general settings
+userpref = {} 		# settings free to change by the users
+log_track = None 	# log_file for racking the user's way
+audio_info_on = True# if the speaker is eanbled
+waypoints_xy = None	# saves the current track as (x,y) coords
+track_xy = None		# saves the locations the users has passed
 origin = [0,0]
 
 def write_settings(set):
@@ -87,8 +68,6 @@ def write_settings(set):
 	keys.sort()
 	for k in keys:
 		file.write("%s=%s\n" % (k, set[k]))
-
-	#print userpref
 
 def load_settings(set):
 	global userpref
@@ -170,8 +149,8 @@ def initialize_settings():
 	set_value(userpref,'log_simple', True, 'bool')
 
 	# File to log debug info into
-	set_value(pref,'debug_log_file', userpref['base_dir']  +'nmea_info_debug.log')
-	#pref['debug_log_file'] = pref['base_dir'] + 'nmea_debug_log_%y-%m-%d.txt'
+	#set_value(pref,'debug_log_file', userpref['base_dir']  +'nmea_info_debug.log')
+
 
 	# DB file to hold waypoints for direction-of stuff
 	set_value(pref,'waypoints_db',userpref['base_dir'] + 'waypoints.db')
@@ -310,7 +289,7 @@ class Track:
 
 			# reopen the actual log file
 			if from_file == userpref["logfile"]:
-				log_track = LogFile(userpref['base_dir'], 'track', fullname = userpref['logfile']) # open new one
+				log_track = LogFile(userpref['base_dir']+'logs\\', 'track', fullname = userpref['logfile']) # open new one
 
 			trackpoints = []
 			self.coords = []
@@ -404,6 +383,11 @@ initialize_settings() # set all key, value pairs which are not present with stan
 active_profile = sysinfo.active_profile()
 if not userpref['audio_info_on'] or active_profile in ['silent','meeting']:
 	audio_info_on = False
+
+class Button :
+	def __init__(self, x0,y0,x1,y1, name='but'):
+		self.rect = ( (x0,y0) , (x1,y1) )
+		self.name = name
 
 # touch events
 touch = {}
@@ -526,6 +510,10 @@ appuifw.app.title=unicode(pref['app_title'])
 # Ensure our data directory exists
 if not os.path.exists(userpref['base_dir']):
 	os.makedirs(userpref['base_dir'])
+
+# make sure the logging dir exists
+if not os.path.exists(userpref['base_dir']+'logs\\'):
+	os.makedirs(userpref['base_dir']+ 'logs\\')
 #############################################################################
 
 class mean_value:
@@ -1580,7 +1568,6 @@ def process_positioning_update(data):
 
 
 #############################################################################
-
 class LogFile:
 	def __init__(self, basepath, name, fullname = None):
 		self.path = basepath
@@ -1656,7 +1643,7 @@ def init_debug_log():
 	global pref
 	global debug_log_fh
 
-	if pref['debug_log_file']:
+	if pref.has_key('debug_log_file') and pref['debug_log_file']:
 		# Open the debug log file, in append mode
 		debug_log_fh = open(pref['debug_log_file'],'a')
 		debug_log_fh.write("Debug Log Opened at %s\n" % time.strftime('%H:%M:%S, %Y-%m-%d', time.localtime(time.time())))
@@ -1964,7 +1951,6 @@ def register_drag_mode(canvas):
 	canvas.bind(key_codes.EDrag, drag_callback)
 
 def touched_on_button(pos, button):
-
 	if  pos[0] >= button[0][0] and pos[0] <  button[1][0]\
 	and pos[1] >= button[0][1] and pos[1] <  button[1][1]:
 		return True
@@ -1974,28 +1960,18 @@ def touched_on_button(pos, button):
 def touch_down_main_cb(pos=(0, 0)):
 	global touch
 	global audio_info_on
-	br = screen_height - 45
-	lock_pos = screen_width - 45
-	wd = 5
-	but1 = (( wd  ,br), (wd + 40, br + 40 ))
-	but2 = (( wd + 1 * (wd + 40) ,br), (wd + 1 * (wd + 40) + 40, br + 40 ))
-	but3 = (( lock_pos ,br), (lock_pos + 40, br + 40 ))
-	but4 = (( lock_pos - 45 ,br), (lock_pos -5, br + 40 ))
 
-	if touched_on_button(pos, but1) :
+	if touched_on_button(pos, touch['buttons'][0]) :
 		touch['main_down'] = 'destination'
-	elif touched_on_button(pos, but2) :
+	elif touched_on_button(pos, touch['buttons'][1]) :
 		touch['main_down'] = 'pen'
-	elif touched_on_button(pos, but3) :
-		touch['main_down'] = 'locked'
-	elif touched_on_button(pos, but4):
+	elif touched_on_button(pos, touch['buttons'][2]):
 		if audio_info_on:
 			touch['main_down'] = 'sound'
 		else:
 			touch['main_down'] = 'sound_off'
-
-	#if touch.has_key('main_down'):
-		#appuifw.note(u'I feel touched at %s.' % touch['main_down'] ,"info")
+	elif touched_on_button(pos, touch['buttons'][3]) :
+		touch['main_down'] = 'locked'
 
 def touch_up_main_cb(pos=(0, 0)):
 	global touch
@@ -2004,11 +1980,12 @@ def touch_up_main_cb(pos=(0, 0)):
 
 	if touch.has_key('main_down'):
 		if touch['main_down'] == 'destination':
-			global current_state
 			current_state = 'destination'
 			draw_state()
 		elif touch['main_down'] == 'pen':
-			pass
+			current_state = 'logactions'
+			draw_state()
+			#appuifw.note(u"Log file options not implemented yet", "info")
 		elif touch['main_down'] == 'locked':
 			pass
 		elif touch['main_down'].startswith('sound'):
@@ -2024,7 +2001,7 @@ def draw_main():
 	global log_interval
 	global disp_notices
 	global disp_notices_count
-	global touch
+	global touch, current_state
 
 	#canvas.clear()
 	register_drag_mode(canvas)
@@ -2041,15 +2018,20 @@ def draw_main():
 	lock_pos = screen_width - 45
 	wd = 5
 
-	but1 = (( wd  ,br), (wd + 40, br + 40 ))
-	but2 = (( wd + 1 * (wd + 40) ,br), (wd + 1 * (wd + 40) + 40, br + 40 ))
-	but3 = (( lock_pos ,br), (lock_pos + 40, br + 40 ))
-	but4 = (( lock_pos - 45 ,br), (lock_pos -5, br + 40 ))
+	if not touch.has_key('state') or touch['state'] != current_state: # create list of buttons new
+		but = []
+		but.append( (( wd  ,br), (wd + 40, br + 40 )) )
+		but.append( (( wd + 1 * (wd + 40) ,br), (wd + 1 * (wd + 40) + 40, br + 40 )) )
+		but.append( (( lock_pos - 45 ,br), (lock_pos -5, br + 40 )) )
+		but.append( (( lock_pos ,br), (lock_pos + 40, br + 40 )) )
 
-	myscreen.rectangle(but1,outline=0x000000, width=2)
-	myscreen.rectangle(but2,outline=0x000000, width=2)
-	myscreen.rectangle(but3,outline=0x000000, width=2)
-	myscreen.rectangle(but4,outline=0x000000, width=2)
+
+		if touch.has_key('buttons'): del touch['buttons'][:]
+		touch['state'] = current_state
+		touch['buttons'] = but
+
+	for i in range(len(touch['buttons'])):
+		myscreen.rectangle(touch['buttons'][i],outline=0x000000, width=2)
 
 	def blit_button(name, xpos):
 		if touch.has_key('main_down') and touch['main_down'] == name:
@@ -2058,12 +2040,12 @@ def draw_main():
 		if buttons[name]:
 			myscreen.blit(buttons[name], target = xpos ) #, scale = 2)
 
-	blit_button('destination', 	but1[0])
-	blit_button('pen', 			but2[0])
-	blit_button('locked', 		but3[0])
+	blit_button('destination', 	touch['buttons'][0][0])
+	blit_button('pen', 			touch['buttons'][1][0])
 	if audio_info_on: snd = 'sound'
 	else: snd = 'sound_off'
-	blit_button(snd, 			but4[0])
+	blit_button(snd, 			touch['buttons'][2][0])
+	blit_button('locked', 		touch['buttons'][3][0])
 
 	# Draw the two boxes below
 	mid = int(screen_width/2)
@@ -2226,17 +2208,9 @@ def draw_main():
 	canvas.blit(myscreen) # show the image on the screen
 
 	# bind the tapping areas
-	canvas.bind(key_codes.EButton1Down, touch_down_main_cb, but1 )
-	canvas.bind(key_codes.EButton1Up, touch_up_main_cb, but1 )
-
-	canvas.bind(key_codes.EButton1Down, touch_down_main_cb, but2 )
-	canvas.bind(key_codes.EButton1Up, touch_up_main_cb, but2 )
-
-	canvas.bind(key_codes.EButton1Down, touch_down_main_cb, but3 )
-	canvas.bind(key_codes.EButton1Up, touch_up_main_cb, but3 )
-
-	canvas.bind(key_codes.EButton1Down, touch_down_main_cb, but4 )
-	canvas.bind(key_codes.EButton1Up, touch_up_main_cb, but4 )
+	for i in range(len(touch['buttons'])):
+		canvas.bind(key_codes.EButton1Down, touch_down_main_cb, touch['buttons'][i] )
+		canvas.bind(key_codes.EButton1Up, touch_up_main_cb, touch['buttons'][i] )
 
 def draw_details():
 	global location
@@ -2343,45 +2317,44 @@ def draw_details():
 			disp_notices_count = 0
 
 def touch_down_track_cb(pos=(0, 0)):
+	"detect which button was pressed"
 	global touch
-	wt = screen_width / 3
-	bh = screen_height - screen_width - 6 # bottom height
-	br1 = screen_width +3  # button row 1
-	br2 = br1 + 3 + bh/2
+	if touch.has_key('buttons'):
+		for i in range(len(touch['buttons'])):
+			if touched_on_button(pos, touch['buttons'][i]):
+				touch['down'] = i
+				break
 
-	if pos[1] >= br1 and pos[1] < br2:
-		if pos[0] <= wt :
-			touch['track_down'] = 'but1'
-		elif pos[0] > wt and pos[0] <= 2*wt :
-			touch['track_down'] = 'but2'
-		elif pos[0] > 2*wt and pos[0] <= screen_width :
-			touch['track_down'] = 'but3'
-	elif pos[1] >= br2:
-		touch['track_down'] = 'but4'
-#		appuifw.note(u'I feel touched.' ,"info")
-	pass
 
 def touch_up_track_cb(pos=(0, 0)):
 	global touch
-	global current_waypoint
+	global current_waypoint, waypoints
 	global track_xy, waypoints_xy
 
-	if touch.has_key('track_down'):
-		if touch['track_down'] == 'but1':
+	if touch.has_key('down'):
+		if touch['down'] == 0:
 			select_closest_waypoint()
-		elif touch['track_down'] == 'but2':
+		elif touch['down'] == 1:
 			select_prev_waypoint()
 			#if current_waypoint > 0: current_waypoint -= 1
-		elif touch['track_down'] == 'but3':
+		elif touch['down'] == 2:
 			select_next_waypoint()
-		elif touch['track_down'] == 'but4':
+		elif touch['down'] == 3:
+			waypoints.reverse()
+			old = current_waypoint
+			diff = len(waypoints) - 1 - current_waypoint
+			current_waypoint = diff
+			del waypoints_xy # clear all waypoints
+			waypoints_xy = None # they will be computed new
+			appuifw.note(u"current_waypoint : %d () old: %d" % (current_waypoint, old), "info")
+		elif touch['down'] == 4:
 			if not track_xy:
 				track_xy = Track(from_file = userpref["logfile"])
 			else:
 				del track_xy
 				track_xy = None
 
-		del touch['track_down']
+		del touch['down']
 
 def draw_track():
 	global waypoints
@@ -2396,146 +2369,144 @@ def draw_track():
 	wd = 5 # window distance to the border
 
 	myscreen = Image.new((screen_width,screen_height))
-	myscreen.rectangle(((wd,wd),(screen_width - wd, screen_width - wd)),outline=0x000000, width=2)
 
-	if waypoints_xy == None : # compute x,y coordinates and store them in waypoints
-		waypoints_xy = Track(waypoints)
+	if len(waypoints) > 0 :
+		myscreen.rectangle(((wd,wd),(screen_width - wd, screen_width - wd)),outline=0x000000, width=2)
 
-	# append current position
-	own_position = None
-	if location['valid'] == 1:
-		wgs_ll = get_latlong_floats()
-		try:	own_position = turn_llh_into_xyz(wgs_ll[0],wgs_ll[1],0. ,'wgs84')
-		except: own_position = None
+		if waypoints_xy == None : # compute x,y coordinates and store them in waypoints
+			waypoints_xy = Track(waypoints)
 
-	# compute the scaling factor
-	if own_position != None:
-		xmin = min(waypoints_xy.xrange[0], own_position[0])
-		xmax = max(waypoints_xy.xrange[1], own_position[0])
+		# append current position
+		own_position = None
+		if location['valid'] == 1:
+			wgs_ll = get_latlong_floats()
+			try:	own_position = turn_llh_into_xyz(wgs_ll[0],wgs_ll[1],0. ,'wgs84')
+			except: own_position = None
 
-		ymin = min(waypoints_xy.yrange[0], own_position[1])
-		ymax = max(waypoints_xy.yrange[1], own_position[1])
-	else:
-		xmin, xmax = waypoints_xy.xrange
-		ymin, ymax = waypoints_xy.yrange
+		# compute the scaling factor
+		if own_position != None:
+			xmin = min(waypoints_xy.xrange[0], own_position[0])
+			xmax = max(waypoints_xy.xrange[1], own_position[0])
 
-	if track_xy:
-		xmin = min(track_xy.xrange[0], xmin)
-		xmax = max(track_xy.xrange[1], xmax)
-
-		ymin = min(track_xy.yrange[0], ymin)
-		ymax = max(track_xy.yrange[1], ymax)
-
-	xfactor = (xmax - xmin) / float(screen_width - 40)
-	yfactor = (ymax - ymin) / float(screen_width - 40)
-	factor = max(xfactor, yfactor) # select the largest scaling factor
-
-	# plot the waypoints
-	waypoints_xy.rescale([xmin, ymin], factor, offset = [20,20])
-	for i in range(len(waypoints_xy.coords)-1):
-		myscreen.line([waypoints_xy.coords[i][1],waypoints_xy.coords[i][0],waypoints_xy.coords[i+1][1],waypoints_xy.coords[i+1][0]], outline=0x0000AA,width=3)
-
-	# start and end point of the route
-	myscreen.point([waypoints_xy.coords[0][1],waypoints_xy.coords[0][0]], outline=0x00AA00, width=10)
-	if len(waypoints_xy.coords) > 1:
-		l = len(waypoints_xy.coords) -1
-		myscreen.point([waypoints_xy.coords[l][1],waypoints_xy.coords[l][0]], outline=0xAA0000, width=10)
-
-	# draw waypoint tat is currently approached
-	if current_waypoint != -1:
-		l = current_waypoint
-		myscreen.point([waypoints_xy.coords[l][1],waypoints_xy.coords[l][0]], outline=0x007215, width=10)
-
-
-	#plot the current track
-	if track_xy and len(track_xy) > 0:
-		track_xy.rescale([xmin, ymin], factor, offset=[20,20])
-		for i in range(len(track_xy.coords)-1):
-			myscreen.line([track_xy.coords[i][1],track_xy.coords[i][0],track_xy.coords[i+1][1],track_xy.coords[i+1][0]], outline=0x5B75A5,width=1)
-
-		myscreen.point([track_xy.coords[0][1],track_xy.coords[0][0]], outline=0x00AA00, width=10)
-		if len(track_xy) > 1:
-			l = len(track_xy.coords) -1
-			myscreen.point([track_xy.coords[l][1],track_xy.coords[l][0]], outline=0xAA0000, width=10)
-
-	if own_position:
-		xymin = (xmin, ymin)
-		for j in [0,1]:
-			own_position[j] -= (xymin[j])
-			own_position[j] /= factor
-			own_position[j] = int(own_position[j]) + 20
-
-		myscreen.point([own_position[1], own_position[0]], outline=0x0000AA, width=10)
-
-	# bind to touch interface
-	bh = screen_height - screen_width - 6 # bottom height
-	hw = bh/2
-	br1 = screen_width +3  # button row 1
-	br2 = br1 + 3 + bh/2
-
-
-	but1 = ((wt/2 - 20 ,screen_width + 3 + hw/2  - 20), (wt/2 +20, screen_width + 3 + hw/2 + 40))
-	but1_rect = (( 0 * wt, br1 ), (	 wt , br2-3))
-	but2_rect = (( 1 * wt, br1 ), ( 2 * wt , br2-3))
-	but3_rect = (( 2 * wt, br1 ), ( 3 * wt , br2-3))
-
-	myscreen.rectangle(but1_rect,outline=0x000000, width=2)
-	if buttons['track_shortest_distance']:
-		myscreen.blit(buttons['track_shortest_distance'], target = but1[0] ) #, scale = 2)
-	myscreen.rectangle(but2_rect,outline=0x000000, width=2)
-	myscreen.rectangle(but3_rect,outline=0x000000, width=2)
-
-	but4_rect = (( 0 * wt, br2 ), ( 3 * wt , screen_height - 3))
-	myscreen.rectangle(but4_rect,outline=0x000000, width=2)
-
-	# mark as pressed
-	if touch.has_key('track_down') :
-		if touch['track_down'] == 'but1':
-			if buttons['track_shortest_distance_down']:
-				myscreen.blit(buttons['track_shortest_distance_down'], target = but1[0] ) #, scale = 2)
-			else:
-				myscreen.rectangle(but1_rect,outline=0x000000, fill=RGB_LIGHT_BLUE, width=2)
-		elif touch['track_down'] == 'but2':
-			myscreen.rectangle(but2_rect,outline=0x000000, fill=RGB_LIGHT_BLUE, width=2)
-		elif touch['track_down'] == 'but3':
-			myscreen.rectangle(but3_rect,outline=0x000000, fill=RGB_LIGHT_BLUE, width=2)
-		elif touch['track_down'] == 'but4':
-			myscreen.rectangle(but4_rect,outline=0x000000, fill=RGB_LIGHT_BLUE, width=2)
-
-
-
-	myscreen.text( (wt + wt/2   , br1 + hw/2-5), u'<', 0x008000, "normal")
-	myscreen.text( (2* wt + wt/2, br1 + hw/2-5), u'>', 0x008000, "normal")
-	if not track_xy:
-		myscreen.text( (1* wt, br2 + hw/2-5), u'load track', 0x008000, "normal")
-	else:
-		myscreen.text( (1* wt, br2 + hw/2-7), u'unload track', 0x008000, "normal")
-
-	next_direction = get_next_turning_info()
-	if next_direction and abs(next_direction) > userpref['min_direction_difference']:
-		dir = "right"
-		if next_direction < 0.: dir = "left"
-		if info.has_key('distance_human'):
-			msg = u"in %s %s" % (info['distance_human'], dir)
+			ymin = min(waypoints_xy.yrange[0], own_position[1])
+			ymax = max(waypoints_xy.yrange[1], own_position[1])
 		else:
-			msg = u"next turn : %s" % (dir)
-		myscreen.text( ( 2 * wd, screen_width - small_line_spacing), '%s' % (msg), 0x008000, "normal")
+			xmin, xmax = waypoints_xy.xrange
+			ymin, ymax = waypoints_xy.yrange
+
+		if track_xy:
+			xmin = min(track_xy.xrange[0], xmin)
+			xmax = max(track_xy.xrange[1], xmax)
+
+			ymin = min(track_xy.yrange[0], ymin)
+			ymax = max(track_xy.yrange[1], ymax)
+
+		xfactor = (xmax - xmin) / float(screen_width - 40)
+		yfactor = (ymax - ymin) / float(screen_width - 40)
+		factor = max(xfactor, yfactor) # select the largest scaling factor
+
+		# plot the waypoints
+		waypoints_xy.rescale([xmin, ymin], factor, offset = [20,20])
+		for i in range(len(waypoints_xy.coords)-1):
+			myscreen.line([waypoints_xy.coords[i][1],waypoints_xy.coords[i][0],waypoints_xy.coords[i+1][1],waypoints_xy.coords[i+1][0]], outline=0x0000AA,width=3)
+
+		# start and end point of the route
+		myscreen.point([waypoints_xy.coords[0][1],waypoints_xy.coords[0][0]], outline=0x00AA00, width=10)
+		if len(waypoints_xy.coords) > 1:
+			l = len(waypoints_xy.coords) -1
+			myscreen.point([waypoints_xy.coords[l][1],waypoints_xy.coords[l][0]], outline=0xAA0000, width=10)
+
+		# draw waypoint that is currently approached
+		if current_waypoint != -1:
+			l = current_waypoint
+			myscreen.point([waypoints_xy.coords[l][1],waypoints_xy.coords[l][0]], outline=0x007215, width=10)
+
+
+		#plot the current track
+		if track_xy and len(track_xy) > 0:
+			track_xy.rescale([xmin, ymin], factor, offset=[20,20])
+			for i in range(len(track_xy.coords)-1):
+				myscreen.line([track_xy.coords[i][1],track_xy.coords[i][0],track_xy.coords[i+1][1],track_xy.coords[i+1][0]], outline=0x5B75A5,width=1)
+
+			myscreen.point([track_xy.coords[0][1],track_xy.coords[0][0]], outline=0x00AA00, width=10)
+			if len(track_xy) > 1:
+				l = len(track_xy.coords) -1
+				myscreen.point([track_xy.coords[l][1],track_xy.coords[l][0]], outline=0xAA0000, width=10)
+
+		if own_position:
+			xymin = (xmin, ymin)
+			for j in [0,1]:
+				own_position[j] -= (xymin[j])
+				own_position[j] /= factor
+				own_position[j] = int(own_position[j]) + 20
+
+			myscreen.point([own_position[1], own_position[0]], outline=0x0000AA, width=10)
+
+		# bind to touch interface
+		bh = screen_height - screen_width - 6 # bottom height
+		hw = bh/2
+		br1 = screen_width +3  # button row 1
+		br2 = br1 + 3 + bh/2   # button row 2
+
+
+		if not touch.has_key('state') or touch['state'] != current_state: # create list of buttons new
+			but = []
+			for i in range(3): # first button row
+				but.append( (( i * wt, br1 ), (	(i+1) * wt , br2-3)) )
+			but.append( ( ( 0 * wt, br2 ), ( 1 * wt , screen_height - 3) ) )
+			but.append( ( ( 1 * wt, br2 ), ( 3 * wt , screen_height - 3) ) )
+
+			if touch.has_key('buttons'): del touch['buttons'][:]
+			touch['state'] = current_state
+			touch['buttons'] = but
+
+		for i in range(len(touch['buttons'])): # drwa all rectangles
+			myscreen.rectangle(touch['buttons'][i],outline=0x000000, width=2)
+
+		but1 = (wt/2 - 20 ,screen_width + 3 + hw/2  - 20)
+		if buttons['track_shortest_distance']: # and the images
+			myscreen.blit(buttons['track_shortest_distance'], target = but1 ) #, scale = 2)
+
+		# mark as pressed
+		if touch.has_key('down'):
+			#nr = int(touch['track_down'][3])-1
+			nr = touch['down']
+			myscreen.rectangle(touch['buttons'][nr],outline=0x000000, fill=RGB_LIGHT_BLUE, width=2)
+			if nr == 0:
+				if buttons['track_shortest_distance_down']:
+					myscreen.blit(buttons['track_shortest_distance_down'], target = but1) #, scale = 2)
+
+		myscreen.text( (wt + wt/2   , br1 + hw/2-5), u'<', 0x008000, "normal")
+		myscreen.text( (2* wt + wt/2, br1 + hw/2-5), u'>', 0x008000, "normal")
+		myscreen.text( (3, br2 + hw/2-5), u'<>', 0x008000, "normal")
+		if not track_xy:
+			myscreen.text( (1.8* wt, br2 + hw/2-5), u'load track', 0x008000, "normal")
+		else:
+			myscreen.text( (1.8* wt, br2 + hw/2-5), u'unload track', 0x008000, "normal")
+
+		next_direction = get_next_turning_info()
+		if next_direction and abs(next_direction) > userpref['min_direction_difference']:
+			dir = "right"
+			if next_direction < 0.: dir = "left"
+			if info.has_key('distance_human'):
+				msg = u"in %s %s" % (info['distance_human'], dir)
+			else:
+				msg = u"next turn : %s" % (dir)
+			myscreen.text( ( 2 * wd, screen_width - small_line_spacing), '%s' % (msg), 0x008000, "normal")
+
+	else:
+		myscreen.text( ( small_line_spacing, line_spacing), u'No track or destination loaded.' , 0x008000, "normal")
 
 	register_drag_mode(canvas)
 	canvas.blit(myscreen) # show the image on the screen
 
 	# bind the tapping areas
-	canvas.bind(key_codes.EButton1Down, touch_down_track_cb, but1 )
-	canvas.bind(key_codes.EButton1Up, touch_up_track_cb, but1 )
+	if len(waypoints) > 0:
+		for i in range(len(touch['buttons'])):
+			canvas.bind(key_codes.EButton1Down, touch_down_track_cb,touch['buttons'][i] )
+			canvas.bind(key_codes.EButton1Up, touch_up_track_cb, touch['buttons'][i] )
 
-	canvas.bind(key_codes.EButton1Down, touch_down_track_cb, but2_rect )
-	canvas.bind(key_codes.EButton1Up, touch_up_track_cb, but2_rect )
 
-	canvas.bind(key_codes.EButton1Down, touch_down_track_cb, but3_rect )
-	canvas.bind(key_codes.EButton1Up, touch_up_track_cb, but3_rect )
-
-	canvas.bind(key_codes.EButton1Down, touch_down_track_cb, but4_rect )
-	canvas.bind(key_codes.EButton1Up, touch_up_track_cb, but4_rect )
 
 class MapImage:
 	def __init__(self, x, y, z, file):
@@ -2959,34 +2930,37 @@ def draw_take_photo():
 	if not preview_photo == None:
 		canvas.blit(preview_photo,target=(5,yPos))
 
+def get_file_list(subfolder="logs\\"):
+	"Retrieves the list of logfiles stored on the phone"
 
+	if not userpref['base_dir'].endswith('\\'):
+		folder = userpref['base_dir'] + '\\'
+	else:
+		folder = userpref['base_dir']
 
-def touch_down_destination_cb(pos=(0, 0)):
-	global touch
-	w = (screen_width - 10) # used width
-	wd = 5 # window distance to the border
-	but1 = ((wd, wd), (wd + w, wd + 2 * line_spacing))
-	but2 = ((wd, 2 * wd + 2 * line_spacing ), (wd + w, wd + 4 * line_spacing))
-	but3 = ((wd, 2 * wd + 4 * line_spacing ), (wd + w, wd + 6 * line_spacing))
-
-	if pos[1] >= but1[0][1] and pos[1] < but1[1][1]:
-		touch['dest_down'] = 'but1'
-	elif pos[1] >= but2[0][1] and pos[1] < but2[1][1]:
-		touch['dest_down'] = 'but2'
-	elif pos[1] >= but3[0][1] and pos[1] < but3[1][1]:
-		touch['dest_down'] = 'but3'
-
+	folder +=  subfolder
+	if not folder.endswith('\\'):
+		folder += '\\'
+	print folder
+	liste = os.listdir(folder)
+	ulist = []
+	for i in liste:
+		if i: ulist.append(unicode(i))
+	return ulist
 
 def touch_up_destination_cb(pos=(0, 0)):
 	global touch
 	global new_destination_form
 	global current_waypoint
 	global waypoints
+	global userpref
+	global current_state
 
-	if touch.has_key('dest_down'):
-		if touch['dest_down'] == 'but1':
+	if touch.has_key('down'):
+		if touch['down'] == 0:
 			new_destination_form.show(clear_all = True)
-		elif touch['dest_down'] == 'but2': # select a waypoint
+			current_state = 'main'
+		elif touch['down'] == 1: # select a waypoint
 			#i=appuifw.multi_selection_list([u"Item1", u"Item2"], style='checkbox', search_field=1)
 			list = load_destination_db()
 			sel = []
@@ -2996,58 +2970,151 @@ def touch_up_destination_cb(pos=(0, 0)):
 				else:
 					sel.append(u"Waypoint %d" % i)
 			i=appuifw.selection_list(sel, search_field=1)
-			if i != None:
+			if i > -1:
 				waypoints.append(list[i])
 				current_waypoint = len(waypoints) - 1 # set the waypoint
 			del list
-		elif touch['dest_down'] == 'but3':
+			current_state = 'main'
+		elif touch['down'] == 2:
 			new_destination_form.show(clear_all = False)
+			current_state = 'main'
+		elif touch['down'] == 3:
 
-		del touch['dest_down']
+			files = get_file_list(subfolder='logs\\')
+			if len(files) > 0:
+				i=appuifw.selection_list(files, search_field=1)
+				if i > -1:
+					if not userpref['base_dir'].endswith('\\'):
+						fn = userpref['base_dir'] + '\\logs\\' + files[i]
+					else:
+						fn = userpref['base_dir'] +'logs\\'+ files[i]
+					file = open(fn, "r")
+					lines = file.readlines()
+					file.close()
+
+					if len(lines) > 0: del waypoints[:]
+					for l in lines:
+						li = l.strip()
+						if li.startswith('#') or len(li) == 0: continue
+						wp = li.split()
+						waypoints.append(wp)
+					appuifw.note(u"# waypoints: %d" % len(waypoints), "info");
+					if len(waypoints) > 0:	current_waypoint = 0
+					else: current_waypoint = -1
+					current_state = 'track'
+			else:
+				appuifw.note(u"No log files found.", "info");
+		elif touch['down'] == 4:
+			appuifw.note(u"Not implemented yet.", "info");
+		elif touch['down'] == 5:
+			del waypoints[:]
+			current_waypoint = -1
+			current_state = 'track'
+
+		del touch['down']
 
 def draw_destination():
 	global waypoints
 	global location
 	global current_waypoint
-	global touch
+	global touch, current_state
+
+	myscreen = Image.new((screen_width,screen_height))#~
 
 	w = (screen_width - 10) # used width
 	wd = 5 # window distance to the border
 
-	but1 = ((wd, wd), (wd + w, wd + 2 * line_spacing))
-	but2 = ((wd, 2 * wd + 2 * line_spacing ), (wd + w, wd + 4 * line_spacing))
-	but3 = ((wd, 2 * wd + 4 * line_spacing ), (wd + w, wd + 6 * line_spacing))
+	if not touch.has_key('state') or touch['state'] != current_state:
+		but = []
+		but.append( ((wd, wd), (wd + w, wd + 2 * line_spacing)) )
+		for i in range(1,6):
+			but.append( ((wd, 2 * wd + 2 *i* line_spacing ), (wd + w, wd + ((2*i) + 2) * line_spacing)) )
+		try: del touch['buttons'][:]
+		except: pass
+		touch['buttons'] = but
+		touch['state'] = current_state
 
-	myscreen = Image.new((screen_width,screen_height))
-	myscreen.rectangle(but1,outline=0x000000, width=2)
-	myscreen.rectangle(but2,outline=0x000000, width=2)
-	myscreen.rectangle(but3,outline=0x000000, width=2)
+	for i in range(len(touch['buttons'])):
+		myscreen.rectangle(touch['buttons'][i],outline=0x000000, width=2)
 
 	# mark as pressed
-	if touch.has_key('dest_down') :
-		if touch['dest_down'] == 'but1':
-			myscreen.rectangle(but1,outline=0x000000, fill=RGB_LIGHT_BLUE, width=2)
-		elif touch['dest_down'] == 'but2':
-			myscreen.rectangle(but2,outline=0x000000, fill=RGB_LIGHT_BLUE, width=2)
-		elif touch['dest_down'] == 'but3':
-			myscreen.rectangle(but3,outline=0x000000, fill=RGB_LIGHT_BLUE, width=2)
+	if touch.has_key('down') :
+		item = touch['down']
+		myscreen.rectangle(touch['buttons'][item],outline=0x000000, fill=RGB_LIGHT_BLUE, width=2)
 
-	myscreen.text( ( but1[0][0] + wd , but1[0][1] + line_spacing ) , u'Select new destination ', 0x008000, "normal")
-	myscreen.text( ( but2[0][0] + wd , but2[0][1] + line_spacing ) , u'Use known destination ', 0x008000, "normal")
-	myscreen.text( ( but3[0][0] + wd , but3[0][1] + line_spacing ) , u'Add waypoint', 0x008000, "normal")
+	myscreen.text( ( touch['buttons'][0][0][0] + wd , touch['buttons'][0][0][1] + line_spacing ) , u'Enter destination ', 0x008000, "normal")
+	myscreen.text( ( touch['buttons'][1][0][0] + wd , touch['buttons'][1][0][1] + line_spacing ) , u'Add known destination ', 0x008000, "normal")
+	myscreen.text( ( touch['buttons'][2][0][0] + wd , touch['buttons'][2][0][1] + line_spacing ) , u'Add waypoint', 0x008000, "normal")
+	myscreen.text( ( touch['buttons'][3][0][0] + wd , touch['buttons'][3][0][1] + line_spacing ) , u'Load track from log', 0x008000, "normal")
+	myscreen.text( ( touch['buttons'][4][0][0] + wd , touch['buttons'][4][0][1] + line_spacing ) , u'Load track from gpx', 0x008000, "normal")
+	myscreen.text( ( touch['buttons'][5][0][0] + wd , touch['buttons'][5][0][1] + line_spacing ) , u'Clear current track', 0x008000, "normal")
 
 	#register_drag_mode(canvas)
 	canvas.blit(myscreen) # show the image on the screen
 
 	# bind the tapping areas
-	canvas.bind(key_codes.EButton1Down, touch_down_destination_cb, but1 )
-	canvas.bind(key_codes.EButton1Up, touch_up_destination_cb, but1 )
+	for i in touch['buttons']:
+		canvas.bind(key_codes.EButton1Down, touch_down_track_cb, i )
+		canvas.bind(key_codes.EButton1Up, touch_up_destination_cb, i )
 
-	canvas.bind(key_codes.EButton1Down, touch_down_destination_cb, but2 )
-	canvas.bind(key_codes.EButton1Up, touch_up_destination_cb, but2 )
+def touch_up_logactions_cb(pos=(0, 0)):
+	global touch
+	global new_destination_form
+	global current_waypoint
+	global waypoints
+	global userpref
+	global current_state
 
-	canvas.bind(key_codes.EButton1Down, touch_down_destination_cb, but3 )
-	canvas.bind(key_codes.EButton1Up, touch_up_destination_cb, but3 )
+	if touch.has_key('down'):
+		if touch['down'] == 0:
+			pick_new_file()
+		#elif touch['down'] == 1:
+			#pass
+		else:
+			appuifw.note(u"Not implemented yet", "info")
+
+		del touch['down']
+
+def draw_log_actions():
+	global waypoints
+	global location
+	global current_waypoint
+	global touch, current_state
+
+	myscreen = Image.new((screen_width,screen_height))#~
+
+	w = (screen_width - 10) # used width
+	wd = 5 # window distance to the border
+
+	if not touch.has_key('state') or touch['state'] != current_state:
+		but = []
+		#but.append( ((wd, wd), (wd + w, wd + 2 * line_spacing)) )
+		for i in range(3):
+			but.append( ((wd, 2 * wd + 2 *i* line_spacing ), (wd + w, wd + ((2*i) + 2) * line_spacing)) )
+		try: del touch['buttons'][:]
+		except: pass
+		touch['buttons'] = but
+		touch['state'] = current_state
+
+	for i in range(len(touch['buttons'])):
+		myscreen.rectangle(touch['buttons'][i],outline=0x000000, width=2)
+
+	# mark as pressed
+	if touch.has_key('down') :
+		item = touch['down']
+		myscreen.rectangle(touch['buttons'][item],outline=0x000000, fill=RGB_LIGHT_BLUE, width=2)
+
+	myscreen.text( ( touch['buttons'][0][0][0] + wd , touch['buttons'][0][0][1] + line_spacing ) , u'Start new log file', 0x008000, "normal")
+	myscreen.text( ( touch['buttons'][1][0][0] + wd , touch['buttons'][1][0][1] + line_spacing ) , u'Delete log files', 0x008000, "normal")
+	myscreen.text( ( touch['buttons'][2][0][0] + wd , touch['buttons'][2][0][1] + line_spacing ) , u'Merge log files', 0x008000, "normal")
+
+	#register_drag_mode(canvas)
+	canvas.blit(myscreen) # show the image on the screen
+
+	# bind the tapping areas
+	for i in touch['buttons']:
+		canvas.bind(key_codes.EButton1Down, touch_down_track_cb, i )
+		canvas.bind(key_codes.EButton1Up, touch_up_logactions_cb, i )
 
 # Handle config entry selections
 config_lb = ""
@@ -3088,6 +3155,8 @@ def draw_state():
 		draw_map()
 	elif current_state == 'destination':
 		draw_destination()
+	elif current_state == 'logactions':
+		draw_log_actions()
 	else:
 		draw_main()
 
@@ -3146,16 +3215,16 @@ def do_pick_new_file(def_name):
 	# Get new filename
 	new_name = appuifw.query(u"Basename for new file?", "text", def_name)
 
-	if len(new_name) > 0:
+	if new_name and len(new_name) > 0:
 		# Check it doesn't exist
-		new_file_name = userpref['base_dir'] + new_name
+		new_file_name = userpref['base_dir']+'logs\\' + new_name
 		if os.path.exists(new_file_name):
 			appuifw.note(u"That file already exists", "error")
 			do_pick_new_file(new_name) # ask again for new file
 			return
 
 		del log_track # close the old log file
-		log_track = LogFile(userpref['base_dir'], new_file_name) # open new one
+		log_track = LogFile(userpref['base_dir']+'logs\\', new_file_name) # open new one
 		userpref["logfile"] = log_track.fullpath
 		appuifw.note(u"Now logging to new file %s" % os.path.basename(log_track.fullpath))
 
@@ -3464,8 +3533,9 @@ appuifw.app.menu=[
 	(u'OS Data',pick_os_data),
 	(u'Direction Of',pick_direction_of),
 	(u'Take Photo',pick_take_photo),
-	(u'Upload',pick_upload), (u'Configuration',pick_config),
-	(u'New Log File', pick_new_file)]
+	(u'Upload',pick_upload),
+	(u'Configuration',pick_config),
+	]
 
 #############################################################################
 
@@ -3480,9 +3550,9 @@ if not audio_info_on: #userpref['audio_info_on'] :
 	appuifw.note(u"audio info is OFF", "info")
 
 if userpref.has_key('logfile'): # load last logfile
-	log_track=LogFile(userpref['base_dir'], 'track', fullname = userpref['logfile'])
+	log_track=LogFile(userpref['base_dir']+'logs\\', 'track', fullname = userpref['logfile'])
 else:
-	log_track=LogFile(userpref['base_dir'], 'track')
+	log_track=LogFile(userpref['base_dir']+'logs\\', 'track')
 
 # Loop while active
 appuifw.app.exit_key_handler = exit_key_pressed
