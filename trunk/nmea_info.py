@@ -834,6 +834,15 @@ def select_next_waypoint():
 				selection = w
 				break
 
+			## compute direction to one waypoint ahead
+			#tmp3 = waypoints[w+1]
+			#ndist = calculate_distance_and_bearing(tmp2[1], tmp2[2], tmp3[1], tmp3[2])
+			#ndistance, ndirection = dist_tupel_to_floats(dist)
+
+			## compute the mean direction
+			#direction += ndirection
+			#direction /= 2
+
 			if first_direction == None:						# save the direction
 				first_direction = direction
 				mean_direction = direction
@@ -861,6 +870,66 @@ def select_next_waypoint():
 				return diff - 180. # if > 0 turn right, else left
 
 	return None # nothing done
+
+#def select_next_waypoint():
+	#"""Searches the next upcoming waypoint which can be reached on a straight
+	#line and returns the direction which has to be chosen at the
+	#actual GPS position """
+	#global current_waypoint
+	#global waypoints
+
+	#start = waypoints[current_waypoint]
+
+	#old_direction = None
+	#if info.has_key('avg_heading'): # use moving direction if present
+		#old_direction = info['avg_heading']
+	#elif current_waypoint > 0:
+		#last = waypoints[current_waypoint - 1]
+		#dist = calculate_distance_and_bearing(last[1],last[2], start[1],start[2])
+		#distance, old_direction = dist_tupel_to_floats(dist)
+
+	#first_direction = None
+	#mean_direction = None
+	#selection = None
+	#if len(waypoints) > current_waypoint + 1 :
+		#for w in range(current_waypoint+1, len(waypoints)):
+			#tmp1 = waypoints[w-1]
+			#tmp2 = waypoints[w]
+			#dist = calculate_distance_and_bearing(tmp1[1], tmp1[2], tmp2[1], tmp2[2])
+			#distance, direction = dist_tupel_to_floats(dist)
+
+			## if this is the last waypoint and loop did not break, then select this one
+			#if w == len(waypoints) -1:
+				#selection = w
+				#break
+
+			#if first_direction == None:						# save the direction
+				#first_direction = direction
+				#mean_direction = direction
+			#else:
+				#if abs(mean_direction - direction) < userpref['min_direction_difference']  :   # if directions differ only by max. 10 degrees
+					#mean_direction += direction		# compute the mean value
+					#mean_direction /= 2
+					#continue						# and check the next waypoint
+				#else:
+					#selection = w - 1				# else save the last waypoint which lies on a straight line to the waypoint we where last
+					#break
+
+		#if selection:
+			#current_waypoint = selection
+		#else: # not found any matching waypoint, must take the next point
+			#current_waypoint += 1
+
+		#compute_positional_data() # update direction info
+
+		## return direction difference only, when it is greater then the threshold value
+		#if old_direction != None and mean_direction != None:# and diff > pref['min_direction_difference']:
+			#diff = old_direction - mean_direction
+			#if diff < 0 : diff += 360
+			#if abs(diff) > userpref['min_direction_difference']:
+				#return diff - 180. # if > 0 turn right, else left
+
+	#return None # nothing done#~
 
 def select_prev_waypoint():
 	"""Searches the next upcoming waypoint which can be reached on a straight
@@ -2325,7 +2394,6 @@ def touch_down_track_cb(pos=(0, 0)):
 				touch['down'] = i
 				break
 
-
 def touch_up_track_cb(pos=(0, 0)):
 	global touch
 	global current_waypoint, waypoints
@@ -2353,8 +2421,34 @@ def touch_up_track_cb(pos=(0, 0)):
 			else:
 				del track_xy
 				track_xy = None
+		elif touch['down'] == 5:
+			if touch.has_key('zoom'):
+				touch['zoom'] *= 2.
+			else:
+				touch['zoom'] = 2.
+		elif touch['down'] == 6:
+			if touch.has_key('zoom'):
+				touch['zoom'] /= 2.
+			else:
+				touch['zoom'] = 1.
 
 		del touch['down']
+	# delete the last position
+	if touch.has_key('last_pos'): del touch['last_pos']
+
+def drag_track_callback(pos=(0,0)):
+	global touch
+	global current_state
+	if not touch.has_key('last_pos'):	touch['last_pos'] = pos
+	if not touch.has_key('offset'):		touch['offset'] = [0,0]
+
+	drag = ( (pos[0]-touch['last_pos'][0] ),(pos[1]-touch['last_pos'][1] ))
+
+	canvas.line( (pos,touch['last_pos']), outline=0x0000AA,width=3)
+
+	touch['offset'][0] += drag[0]
+	touch['offset'][1] += drag[1]
+	touch['last_pos'] = pos
 
 def draw_track():
 	global waypoints
@@ -2363,15 +2457,16 @@ def draw_track():
 	global touch
 	global waypoints_xy
 	global track_xy
-	global origin
 
 	wt = screen_width / 3 # wt = width_third
 	wd = 5 # window distance to the border
 
 	myscreen = Image.new((screen_width,screen_height))
+	mycanvas = None
 
 	if len(waypoints) > 0 :
-		myscreen.rectangle(((wd,wd),(screen_width - wd, screen_width - wd)),outline=0x000000, width=2)
+		mycanvas = ((wd,wd),(screen_width - wd, screen_width - wd))
+		myscreen.rectangle(mycanvas,outline=0x000000, width=2)
 
 		if waypoints_xy == None : # compute x,y coordinates and store them in waypoints
 			waypoints_xy = Track(waypoints)
@@ -2404,9 +2499,36 @@ def draw_track():
 		xfactor = (xmax - xmin) / float(screen_width - 40)
 		yfactor = (ymax - ymin) / float(screen_width - 40)
 		factor = max(xfactor, yfactor) # select the largest scaling factor
+		if factor == xfactor:	wi = (xmax - xmin) / factor
+		else:					wi = (ymax - ymin) / factor
+
+		if touch.has_key('zoom'):
+			factor *= touch['zoom']
+			if not touch.has_key('zoom_change') or touch['zoom_change'] != touch['zoom']:
+				if touch.has_key('zoom_change'):
+					#touch['offset'][0] *= touch['zoom']
+					#touch['offset'][1] *= touch['zoom']
+					if touch['zoom'] > touch['zoom_change']:
+						touch['offset'][0] += (screen_width -40) / 2.
+						touch['offset'][1] += (screen_width -40) / 2.
+					else:
+						touch['offset'][0] -= (screen_width -40) / 2.
+						touch['offset'][1] -= (screen_width -40) / 2.
+
+				touch['zoom_change'] = touch['zoom']
+		else:
+			touch['zoom'] = 1.
+
+		if not touch.has_key('offset'):
+			touch['offset'] = [0,0]
+
+		offset = [20,20]
+		offset[0] += touch['offset'][1]
+		offset[1] += touch['offset'][0]
 
 		# plot the waypoints
-		waypoints_xy.rescale([xmin, ymin], factor, offset = [20,20])
+		#waypoints_xy.rescale([xmin, ymin], factor, touch['offset'])
+		waypoints_xy.rescale([xmin, ymin], factor, offset)
 		for i in range(len(waypoints_xy.coords)-1):
 			myscreen.line([waypoints_xy.coords[i][1],waypoints_xy.coords[i][0],waypoints_xy.coords[i+1][1],waypoints_xy.coords[i+1][0]], outline=0x0000AA,width=3)
 
@@ -2417,14 +2539,14 @@ def draw_track():
 			myscreen.point([waypoints_xy.coords[l][1],waypoints_xy.coords[l][0]], outline=0xAA0000, width=10)
 
 		# draw waypoint that is currently approached
-		if current_waypoint != -1:
+		if current_waypoint != None:
 			l = current_waypoint
 			myscreen.point([waypoints_xy.coords[l][1],waypoints_xy.coords[l][0]], outline=0x007215, width=10)
 
 
 		#plot the current track
 		if track_xy and len(track_xy) > 0:
-			track_xy.rescale([xmin, ymin], factor, offset=[20,20])
+			track_xy.rescale([xmin, ymin], factor, offset=touch['offset'])
 			for i in range(len(track_xy.coords)-1):
 				myscreen.line([track_xy.coords[i][1],track_xy.coords[i][0],track_xy.coords[i+1][1],track_xy.coords[i+1][0]], outline=0x5B75A5,width=1)
 
@@ -2438,7 +2560,7 @@ def draw_track():
 			for j in [0,1]:
 				own_position[j] -= (xymin[j])
 				own_position[j] /= factor
-				own_position[j] = int(own_position[j]) + 20
+				own_position[j] = int(own_position[j]) + touch['offset']
 
 			myscreen.point([own_position[1], own_position[0]], outline=0x0000AA, width=10)
 
@@ -2455,6 +2577,10 @@ def draw_track():
 				but.append( (( i * wt, br1 ), (	(i+1) * wt , br2-3)) )
 			but.append( ( ( 0 * wt, br2 ), ( 1 * wt , screen_height - 3) ) )
 			but.append( ( ( 1 * wt, br2 ), ( 3 * wt , screen_height - 3) ) )
+
+			# zoom buttons
+			but.append( ( ( screen_width-43, 3 ) , ( screen_width-3 , 43) ) )
+			but.append( ( ( screen_width-43, 43 ), ( screen_width-3 , 83) ) )
 
 			if touch.has_key('buttons'): del touch['buttons'][:]
 			touch['state'] = current_state
@@ -2478,11 +2604,17 @@ def draw_track():
 
 		myscreen.text( (wt + wt/2   , br1 + hw/2-5), u'<', 0x008000, "normal")
 		myscreen.text( (2* wt + wt/2, br1 + hw/2-5), u'>', 0x008000, "normal")
+
 		myscreen.text( (3, br2 + hw/2-5), u'<>', 0x008000, "normal")
 		if not track_xy:
 			myscreen.text( (1.8* wt, br2 + hw/2-5), u'load track', 0x008000, "normal")
 		else:
 			myscreen.text( (1.8* wt, br2 + hw/2-5), u'unload track', 0x008000, "normal")
+
+		myscreen.text( touch['buttons'][5][0] , u'+', 0x008000, "normal")
+		myscreen.text( touch['buttons'][6][0] , u'-', 0x008000, "normal")
+
+		myscreen.text( (100,100) , u'%d/%d' % (touch['offset'][0], touch['offset'][1]), 0x008000, "normal")
 
 		next_direction = get_next_turning_info()
 		if next_direction and abs(next_direction) > userpref['min_direction_difference']:
@@ -2499,6 +2631,10 @@ def draw_track():
 
 	register_drag_mode(canvas)
 	canvas.blit(myscreen) # show the image on the screen
+	if mycanvas:
+		canvas.bind(key_codes.EButton1Down, touch_down_track_cb, mycanvas)
+		canvas.bind(key_codes.EButton1Up, touch_up_track_cb, mycanvas)
+		canvas.bind(key_codes.EDrag, drag_track_callback, mycanvas)
 
 	# bind the tapping areas
 	if len(waypoints) > 0:
@@ -2557,53 +2693,54 @@ def draw_map():
 		try:	own_position = OSM_deg2xy(wgs_ll[0],wgs_ll[1],zoomvalue) # turn_llh_into_xyz(wgs_ll[0],wgs_ll[1],0. ,'wgs84')
 		except: own_position = None
 
-	if own_position:
-		xmin = own_position[0]
-		xmax = own_position[0]
-		ymin = own_position[1]
-		ymax = own_position[1]
-	else:
-		xmin = coords[0][0]
-		xmax = coords[0][0]
-		ymin = coords[0][1]
-		ymax = coords[0][1]
-
-	for i in coords:
-		if i[0] < xmin : xmin = i[0]
-		if i[0] > xmax : xmax = i[0]
-		if i[1] < ymin : ymin = i[1]
-		if i[1] > ymax : ymax = i[1]
-
-	#print "----------------------"
-	#print xmin, xmax , ymin, ymax
-
-	xfactor = (xmax - xmin) / float(screen_width)
-	yfactor = (ymax - ymin) / float(screen_height)
-
-	#print xfactor, yfactor
-	if xfactor and yfactor:
-		for i in range(len(coords)):
-
-			coords[i][0] -= (xmin)
-			coords[i][1] -= (ymin)
-
-			coords[i][0] /= xfactor
-			coords[i][1] /= yfactor
-
-			coords[i][0] = int(coords[i][0])
-			coords[i][1] = int(coords[i][1])
-
+	if len(coords) > 0:
 		if own_position:
-			own_position[0] -= (xmin)
-			own_position[1] -= (ymin)
+			xmin = own_position[0]
+			xmax = own_position[0]
+			ymin = own_position[1]
+			ymax = own_position[1]
+		else:
+			xmin = coords[0][0]
+			xmax = coords[0][0]
+			ymin = coords[0][1]
+			ymax = coords[0][1]
 
-			own_position[0] /= xfactor
-			own_position[1] /= yfactor
+		for i in coords:
+			if i[0] < xmin : xmin = i[0]
+			if i[0] > xmax : xmax = i[0]
+			if i[1] < ymin : ymin = i[1]
+			if i[1] > ymax : ymax = i[1]
 
-			own_position[0] = int(own_position[0])
-			own_position[1] = int(own_position[1])
+		#print "----------------------"
+		#print xmin, xmax , ymin, ymax
 
-			canvas.point([own_position[0], own_position[1]], outline=0xAA0000, width=10)
+		xfactor = (xmax - xmin) / float(screen_width)
+		yfactor = (ymax - ymin) / float(screen_height)
+
+		#print xfactor, yfactor
+		if xfactor and yfactor:
+			for i in range(len(coords)):
+
+				coords[i][0] -= (xmin)
+				coords[i][1] -= (ymin)
+
+				coords[i][0] /= xfactor
+				coords[i][1] /= yfactor
+
+				coords[i][0] = int(coords[i][0])
+				coords[i][1] = int(coords[i][1])
+
+			if own_position:
+				own_position[0] -= (xmin)
+				own_position[1] -= (ymin)
+
+				own_position[0] /= xfactor
+				own_position[1] /= yfactor
+
+				own_position[0] = int(own_position[0])
+				own_position[1] = int(own_position[1])
+
+				canvas.point([own_position[0], own_position[1]], outline=0xAA0000, width=10)
 
 	# plot the track
 	for i in range(len(coords)-1):
@@ -3000,7 +3137,7 @@ def touch_up_destination_cb(pos=(0, 0)):
 						waypoints.append(wp)
 					appuifw.note(u"# waypoints: %d" % len(waypoints), "info");
 					if len(waypoints) > 0:	current_waypoint = 0
-					else: current_waypoint = -1
+					else: current_waypoint = None
 					current_state = 'track'
 			else:
 				appuifw.note(u"No log files found.", "info");
@@ -3008,7 +3145,7 @@ def touch_up_destination_cb(pos=(0, 0)):
 			appuifw.note(u"Not implemented yet.", "info");
 		elif touch['down'] == 5:
 			del waypoints[:]
-			current_waypoint = -1
+			current_waypoint = None
 			current_state = 'track'
 
 		del touch['down']
