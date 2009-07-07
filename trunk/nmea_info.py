@@ -2574,7 +2574,7 @@ def draw_track():
 			for j in [0,1]:
 				own_position[j] -= (xymin[j])
 				own_position[j] /= factor
-				own_position[j] = int(own_position[j]) + offset[i]
+				own_position[j] = int(own_position[j]) + offset[j]
 
 			myscreen.point([own_position[1], own_position[0]], outline=0x0000AA, width=10)
 
