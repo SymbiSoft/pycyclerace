@@ -2499,21 +2499,33 @@ def draw_track():
 		xfactor = (xmax - xmin) / float(screen_width - 40)
 		yfactor = (ymax - ymin) / float(screen_width - 40)
 		factor = max(xfactor, yfactor) # select the largest scaling factor
-		if factor == xfactor:	wi = (xmax - xmin) / factor
-		else:					wi = (ymax - ymin) / factor
+
+		#if factor > 0.:
+			#wx = (xmax - xmin) / factor
+			#wy = (ymax - ymin) / factor
 
 		if touch.has_key('zoom'):
 			factor *= touch['zoom']
 			if not touch.has_key('zoom_change') or touch['zoom_change'] != touch['zoom']:
-				if touch.has_key('zoom_change'):
-					#touch['offset'][0] *= touch['zoom']
-					#touch['offset'][1] *= touch['zoom']
+				if touch.has_key('zoom_change') and factor > 0.:
+					z = touch['zoom']
+
+					#if touch['zoom'] > touch['zoom_change']:
+						#touch['offset'][0] =  touch['offset'][0]/2. + (screen_width-40)/2.
+						#touch['offset'][1] =  touch['offset'][1]/2. + (screen_width-40)/2.
+					#else:
+						#touch['offset'][0] =  touch['offset'][0]*2. - (screen_width-40)/2.
+						#touch['offset'][1] =  touch['offset'][1]*2. - (screen_width-40)/2.
+
 					if touch['zoom'] > touch['zoom_change']:
-						touch['offset'][0] += (screen_width -40) / 2.
-						touch['offset'][1] += (screen_width -40) / 2.
+						touch['offset'][0] =  (touch['offset'][0] + (screen_width)/2.) / 2.
+						touch['offset'][1] =  (touch['offset'][1] + (screen_width)/2.) / 2.
 					else:
-						touch['offset'][0] -= (screen_width -40) / 2.
-						touch['offset'][1] -= (screen_width -40) / 2.
+						touch['offset'][0] =  touch['offset'][0]*2. - (screen_width)/2.
+						touch['offset'][1] =  touch['offset'][1]*2. - (screen_width)/2.
+
+
+
 
 				touch['zoom_change'] = touch['zoom']
 		else:
@@ -2522,7 +2534,7 @@ def draw_track():
 		if not touch.has_key('offset'):
 			touch['offset'] = [0,0]
 
-		offset = [20,20]
+		offset = [0,0]
 		offset[0] += touch['offset'][1]
 		offset[1] += touch['offset'][0]
 
@@ -2538,6 +2550,8 @@ def draw_track():
 			l = len(waypoints_xy.coords) -1
 			myscreen.point([waypoints_xy.coords[l][1],waypoints_xy.coords[l][0]], outline=0xAA0000, width=10)
 
+		myscreen.point([screen_width/2.,screen_width/2.], outline=0xAA0000, width=10)
+
 		# draw waypoint that is currently approached
 		if current_waypoint != None:
 			l = current_waypoint
@@ -2546,7 +2560,7 @@ def draw_track():
 
 		#plot the current track
 		if track_xy and len(track_xy) > 0:
-			track_xy.rescale([xmin, ymin], factor, offset=touch['offset'])
+			track_xy.rescale([xmin, ymin], factor, offset=offset)
 			for i in range(len(track_xy.coords)-1):
 				myscreen.line([track_xy.coords[i][1],track_xy.coords[i][0],track_xy.coords[i+1][1],track_xy.coords[i+1][0]], outline=0x5B75A5,width=1)
 
@@ -2560,7 +2574,7 @@ def draw_track():
 			for j in [0,1]:
 				own_position[j] -= (xymin[j])
 				own_position[j] /= factor
-				own_position[j] = int(own_position[j]) + touch['offset']
+				own_position[j] = int(own_position[j]) + offset[i]
 
 			myscreen.point([own_position[1], own_position[0]], outline=0x0000AA, width=10)
 
@@ -2613,8 +2627,6 @@ def draw_track():
 
 		myscreen.text( touch['buttons'][5][0] , u'+', 0x008000, "normal")
 		myscreen.text( touch['buttons'][6][0] , u'-', 0x008000, "normal")
-
-		myscreen.text( (100,100) , u'%d/%d' % (touch['offset'][0], touch['offset'][1]), 0x008000, "normal")
 
 		next_direction = get_next_turning_info()
 		if next_direction and abs(next_direction) > userpref['min_direction_difference']:
