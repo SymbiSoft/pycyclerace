@@ -555,8 +555,8 @@ class mean_value:
 
 
 info = {} # used to store a lot of information
-info['position_lat_avg'] = mean_value(10)
-info['position_long_avg'] = mean_value(10)
+info['position_lat_avg'] = mean_value(5)
+info['position_long_avg'] = mean_value(5)
 info['speed_avg'] = mean_value(20)
 
 def format_distance(value):
@@ -863,7 +863,7 @@ def select_next_waypoint():
 		compute_positional_data() # update direction info
 
 		# return direction difference only, when it is greater then the threshold value
-		if old_direction != None and mean_direction != None:# and diff > pref['min_direction_difference']:
+		if old_direction != None and mean_direction != None:
 			diff = old_direction - mean_direction
 			if diff < 0 : diff += 360
 			if abs(diff) > userpref['min_direction_difference']:
@@ -991,18 +991,17 @@ def speech_timer():
 						dir = "rechts"
 						if lr < 0.:	dir = "links"
 						if audio_info_on:
-							audio.say("In einhundertfünfzig Metern %s abbiegen." % dir)
+							d = format_audio_number(info['dist'])
+							audio.say("In %s Metern %s abbiegen." % (d,dir))
 					info['150m_warning'] = True
 			elif info.has_key('dist') and (info['dist'] <= 40.): # Waypoint reached
 				if current_waypoint == len(waypoints) -1 :		 # this may be the destination itself
-					if audio_info_on:
-						audio.say("Du bist am Ziel angekommen.")
+					if audio_info_on: audio.say("Du bist am Ziel angekommen.")
 					current_waypoint = None   # stop navigation
 					del info['dist']		# clear distance value
 				elif current_waypoint < len(waypoints) -1:
 					new_direction = select_next_waypoint()						 # otherwise choose next waypoint
-					if audio_info_on:
-						audio.say("Du hast einen Wegpunkt erreicht.")
+					if audio_info_on: audio.say("Du hast einen Wegpunkt erreicht.")
 					# comment on this : Since we navigate only to waypoints
 					# with a changing routing direction, every next
 					# step has to be announced as turning point except
@@ -1040,9 +1039,7 @@ def speech_timer():
 		except SymbianError, e :		# if speaking is not allowed at the moment
 			if not e.errno in [-13,-21] : raise	# if it was another exception, then raise again
 
-
 		e32.ao_sleep(1); #  check only once per second
-		#e32.ao_sleep(pref['info_interval']);
 
 def calc_line(radius,angle,centre):
 	"""Computes a line that starts in the centre of a circle an end on the border - so radius and angle
@@ -1137,8 +1134,6 @@ def load_destination_db():
 
 	return list
 
-
-
 def import_gpx_track():
 	global waypoints
 	global current_waypoint
@@ -1152,11 +1147,9 @@ def import_gpx_track():
 		return False
 
 	file = open(gpx_file_name, "r")
-
 	lines = file.readlines()
 	file.close()
 
-	#waypoints = []
 	counter = 0
 	for l in lines:
 		l = l.strip()
@@ -1164,7 +1157,6 @@ def import_gpx_track():
 			# example line: <trkpt lat="52.51375280" lon="13.45492600">
 			splits = l.split('"')
 			for s in range(len(splits)):
-				#if splits[s].endswith('lat='): print float(splits[s+1])
 				try:
 					if splits[s].endswith('lat='):lat = float(splits[s+1])
 				except: lat = None
@@ -1821,12 +1813,16 @@ def compute_positional_data():
 		info['position_long_avg'].append(wgs_ll[1])
 		info['avg_position'] = ( info['position_lat_avg'].mean(), info['position_long_avg'].mean())
 
-		if not info.has_key('d_last_position'):
-			info['d_last_position'] = wgs_ll
+		def do_log(pos):
 			if userpref['log_simple']:
-				log_track.log([time.strftime("%d.%m.%Y_%H:%M:%S", time.localtime()), wgs_ll[0], wgs_ll[1]])
+				log_track.log([time.strftime("%d.%m.%Y_%H:%M:%S", time.localtime()), pos[0], pos[1]])
 			else:
 				save_gga_log()
+			info['last_log_time'] = time.time()
+
+		if not info.has_key('d_last_position'):
+			info['d_last_position'] = wgs_ll
+			do_log(info['avg_position'])
 		else: # do things we want to do when position has changed enough
 			try :	res = calculate_distance_and_bearing(info['d_last_position'][0], info['d_last_position'][1], wgs_ll[0], wgs_ll[1])
 			except : res = None
@@ -1844,11 +1840,7 @@ def compute_positional_data():
 				if not info.has_key('last_log_time'):
 					info['last_log_time'] = time.time()
 				if time.time() - info['last_log_time'] > float(log_interval):
-					if userpref['log_simple']:
-						log_track.log([time.strftime("%d.%m.%Y_%H:%M:%S", time.localtime()), wgs_ll[0], wgs_ll[1]])
-					else:
-						save_gga_log()
-					info['last_log_time'] = time.time()
+					do_log(info['avg_position'])
 
 	# moving average of speed
 	if motion.has_key('speed') :
@@ -2500,32 +2492,16 @@ def draw_track():
 		yfactor = (ymax - ymin) / float(screen_width - 40)
 		factor = max(xfactor, yfactor) # select the largest scaling factor
 
-		#if factor > 0.:
-			#wx = (xmax - xmin) / factor
-			#wy = (ymax - ymin) / factor
-
 		if touch.has_key('zoom'):
 			factor *= touch['zoom']
 			if not touch.has_key('zoom_change') or touch['zoom_change'] != touch['zoom']:
 				if touch.has_key('zoom_change') and factor > 0.:
-					z = touch['zoom']
-
-					#if touch['zoom'] > touch['zoom_change']:
-						#touch['offset'][0] =  touch['offset'][0]/2. + (screen_width-40)/2.
-						#touch['offset'][1] =  touch['offset'][1]/2. + (screen_width-40)/2.
-					#else:
-						#touch['offset'][0] =  touch['offset'][0]*2. - (screen_width-40)/2.
-						#touch['offset'][1] =  touch['offset'][1]*2. - (screen_width-40)/2.
-
 					if touch['zoom'] > touch['zoom_change']:
 						touch['offset'][0] =  (touch['offset'][0] + (screen_width)/2.) / 2.
 						touch['offset'][1] =  (touch['offset'][1] + (screen_width)/2.) / 2.
 					else:
 						touch['offset'][0] =  touch['offset'][0]*2. - (screen_width)/2.
 						touch['offset'][1] =  touch['offset'][1]*2. - (screen_width)/2.
-
-
-
 
 				touch['zoom_change'] = touch['zoom']
 		else:
@@ -2539,7 +2515,6 @@ def draw_track():
 		offset[1] += touch['offset'][0]
 
 		# plot the waypoints
-		#waypoints_xy.rescale([xmin, ymin], factor, touch['offset'])
 		waypoints_xy.rescale([xmin, ymin], factor, offset)
 		for i in range(len(waypoints_xy.coords)-1):
 			myscreen.line([waypoints_xy.coords[i][1],waypoints_xy.coords[i][0],waypoints_xy.coords[i+1][1],waypoints_xy.coords[i+1][0]], outline=0x0000AA,width=3)
@@ -2609,7 +2584,6 @@ def draw_track():
 
 		# mark as pressed
 		if touch.has_key('down'):
-			#nr = int(touch['track_down'][3])-1
 			nr = touch['down']
 			myscreen.rectangle(touch['buttons'][nr],outline=0x000000, fill=RGB_LIGHT_BLUE, width=2)
 			if nr == 0:
@@ -2679,9 +2653,9 @@ def draw_map():
 	mapinfo = []
 	fname = None
 	#get the maps
-#	for w in waypoints:
-#		res = Map.get_map(w[1],w[2],zoomvalue, online = False)
-#		if not res in mapinfo: mapinfo.append(MapImage(res[1], res[2], zoomvalue, res[0]))
+	#for w in waypoints:
+		#res = Map.get_map(float(w[1]),float(w[2]),zoomvalue, online = False)
+		#if not res in mapinfo: mapinfo.append(MapImage(res[1], res[2], zoomvalue, res[0]))
 	mymap = Image.new((screen_width,screen_height))
 
 #	if fname:
@@ -2695,8 +2669,11 @@ def draw_map():
 
 	coords = []
 	for w in waypoints:
-		res = OSM_deg2xy(w[1],w[2],zoomvalue)
+		#try:
+		res = OSM_deg2xy(float(w[1]),float(w[2]),zoomvalue)
 		coords.append(res)
+		#except:
+			#continue
 
 	# append current position
 	own_position = None
@@ -2728,16 +2705,17 @@ def draw_map():
 
 		xfactor = (xmax - xmin) / float(screen_width)
 		yfactor = (ymax - ymin) / float(screen_height)
+		factor = max(xfactor, yfactor) # select the largest scaling factor
 
 		#print xfactor, yfactor
-		if xfactor and yfactor:
+		if factor:
 			for i in range(len(coords)):
 
 				coords[i][0] -= (xmin)
 				coords[i][1] -= (ymin)
 
-				coords[i][0] /= xfactor
-				coords[i][1] /= yfactor
+				coords[i][0] /= factor
+				coords[i][1] /= factor
 
 				coords[i][0] = int(coords[i][0])
 				coords[i][1] = int(coords[i][1])
@@ -2746,8 +2724,8 @@ def draw_map():
 				own_position[0] -= (xmin)
 				own_position[1] -= (ymin)
 
-				own_position[0] /= xfactor
-				own_position[1] /= yfactor
+				own_position[0] /= factor
+				own_position[1] /= factor
 
 				own_position[0] = int(own_position[0])
 				own_position[1] = int(own_position[1])
