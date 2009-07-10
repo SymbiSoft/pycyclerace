@@ -655,9 +655,12 @@ def set_audio_alert_placetime():
 	"Saves place and time of the last text-to-speech-event."
 	global place_of_last_audio_alert
 	global time_last_audio_message
+	global info
 	time_last_audio_message = time.time()
-	wgs_ll = get_latlong_floats()
-	if wgs_ll != None: place_of_last_audio_alert = wgs_ll
+	#wgs_ll = get_latlong_floats()
+	#if wgs_ll != None:
+	if info.has_key('avg_position') and info['avg_position'] != None:
+		place_of_last_audio_alert = info['avg_position']
 
 
 def audio_direction_info():
@@ -1786,10 +1789,6 @@ def compute_positional_data():
 	wgs_ll = get_latlong_floats();
 	if wgs_ll != None and direction_of_lat and direction_of_long:
 
-		# initialize audio alert place with the first point
-		if place_of_last_audio_alert == None:
-			place_of_last_audio_alert = wgs_ll
-
 		try:
 			res = calculate_distance_and_bearing(wgs_ll[0], wgs_ll[1], direction_of_lat, direction_of_long)
 			info['last_distance_valid'] = True
@@ -1813,15 +1812,20 @@ def compute_positional_data():
 		info['position_long_avg'].append(wgs_ll[1])
 		info['avg_position'] = ( info['position_lat_avg'].mean(), info['position_long_avg'].mean())
 
+		# initialize audio alert place with the first point
+		if place_of_last_audio_alert == None: place_of_last_audio_alert = info['avg_position']
+
 		def do_log(pos):
-			if userpref['log_simple']:
-				log_track.log([time.strftime("%d.%m.%Y_%H:%M:%S", time.localtime()), pos[0], pos[1]])
-			else:
-				save_gga_log()
-			info['last_log_time'] = time.time()
+			if not info.has_key('last_log_time'): info['last_log_time'] = time.time()
+			if time.time() - info['last_log_time'] > float(log_interval):
+				if userpref['log_simple']:
+					log_track.log([time.strftime("%d.%m.%Y_%H:%M:%S", time.localtime()), pos[0], pos[1]])
+				else:
+					save_gga_log()
+				info['last_log_time'] = time.time()
 
 		if not info.has_key('d_last_position'):
-			info['d_last_position'] = wgs_ll
+			info['d_last_position'] = info['avg_position']
 			do_log(info['avg_position'])
 		else: # do things we want to do when position has changed enough
 			try :	res = calculate_distance_and_bearing(info['d_last_position'][0], info['d_last_position'][1], wgs_ll[0], wgs_ll[1])
@@ -1831,16 +1835,12 @@ def compute_positional_data():
 			if dist > 2. * userpref['minimum_warning_distance']:
 				info['d_distance'] = dist
 				info['d_heading']  = dir
-				info['d_last_position'] = wgs_ll
+				info['d_last_position'] = info['avg_position']
 				if info['d_heading'] != None and info['bearing'] != None:
 					info['proposed_direction'] = info['d_heading'] - info['bearing']
 					if info['proposed_direction'] < 0. : info['proposed_direction'] += 360
 
-				# log the track to a file
-				if not info.has_key('last_log_time'):
-					info['last_log_time'] = time.time()
-				if time.time() - info['last_log_time'] > float(log_interval):
-					do_log(info['avg_position'])
+				do_log(info['avg_position'])# log the track to a file
 
 	# moving average of speed
 	if motion.has_key('speed') :
@@ -3197,6 +3197,20 @@ def touch_up_logactions_cb(pos=(0, 0)):
 			pick_new_file()
 		#elif touch['down'] == 1:
 			#pass
+		elif touch['down'] == 1:
+			files = get_file_list(subfolder='logs\\')
+			if len(files) > 0:
+				i=appuifw.multi_selection_list(files, search_field=1)
+				if i > -1:
+					for j in i:
+						if not userpref['base_dir'].endswith('\\'):
+							fn = userpref['base_dir'] + '\\logs\\' + files[j]
+						else:
+							fn = userpref['base_dir'] +'logs\\'+ files[j]
+						os.remove(fn)
+						#appuifw.note(u"Deleting %s." % files[j], "info");
+			else:
+				appuifw.note(u"No log files found.", "info");
 		else:
 			appuifw.note(u"Not implemented yet", "info")
 
