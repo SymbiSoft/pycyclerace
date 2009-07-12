@@ -989,12 +989,14 @@ def speech_timer():
 			# approaching waypoint
 			if info.has_key('dist') and (info['dist'] < 150.) and (info['dist'] > 40.)\
 				and current_waypoint < len(waypoints) -1 and not info.has_key('150m_warning'):
-					lr = get_next_turning_info()
+					lr = select_next_waypoint()						 # otherwise choose next waypoint
+
+					#lr = get_next_turning_info()
 					if lr != None:
 						dir = "rechts"
 						if lr < 0.:	dir = "links"
 						if audio_info_on:
-							d = format_audio_number(info['dist'])
+							d = format_audio_number(int(info['dist']))
 							audio.say("In %s Metern %s abbiegen." % (d,dir))
 					info['150m_warning'] = True
 			elif info.has_key('dist') and (info['dist'] <= 40.): # Waypoint reached
@@ -1003,18 +1005,18 @@ def speech_timer():
 					current_waypoint = None   # stop navigation
 					del info['dist']		# clear distance value
 				elif current_waypoint < len(waypoints) -1:
-					new_direction = select_next_waypoint()						 # otherwise choose next waypoint
-					if audio_info_on: audio.say("Du hast einen Wegpunkt erreicht.")
-					# comment on this : Since we navigate only to waypoints
-					# with a changing routing direction, every next
-					# step has to be announced as turning point except
-					# the last one
-					if current_waypoint != len(waypoints) -1 and new_direction != None:
-						if audio_info_on:
-							if new_direction > 0.:
-								audio.say("Abbiegung rechts !")
-							elif new_direction < 0.:
-								audio.say("Abbiegung links !")
+					#new_direction = select_next_waypoint()						 # otherwise choose next waypoint
+					#if audio_info_on: audio.say("Du hast einen Wegpunkt erreicht.")
+					## comment on this : Since we navigate only to waypoints
+					## with a changing routing direction, every next
+					## step has to be announced as turning point except
+					## the last one
+					#if current_waypoint != len(waypoints) -1 and new_direction != None:
+						#if audio_info_on:
+							#if new_direction > 0.:
+								#audio.say("Abbiegung rechts !")
+							#elif new_direction < 0.:
+								#audio.say("Abbiegung links !")
 
 					try: del info['150m_warning']
 					except: pass
