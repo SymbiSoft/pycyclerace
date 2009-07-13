@@ -837,15 +837,6 @@ def select_next_waypoint():
 				selection = w
 				break
 
-			## compute direction to one waypoint ahead
-			#tmp3 = waypoints[w+1]
-			#ndist = calculate_distance_and_bearing(tmp2[1], tmp2[2], tmp3[1], tmp3[2])
-			#ndistance, ndirection = dist_tupel_to_floats(dist)
-
-			## compute the mean direction
-			#direction += ndirection
-			#direction /= 2
-
 			if first_direction == None:						# save the direction
 				first_direction = direction
 				mean_direction = direction
@@ -862,6 +853,8 @@ def select_next_waypoint():
 			current_waypoint = selection
 		else: # not found any matching waypoint, must take the next point
 			current_waypoint += 1
+
+
 
 		compute_positional_data() # update direction info
 
@@ -988,7 +981,8 @@ def speech_timer():
 		try:
 			# approaching waypoint
 			if info.has_key('dist') and (info['dist'] < 150.) and (info['dist'] > 40.)\
-				and current_waypoint < len(waypoints) -1 and not info.has_key('150m_warning'):
+				and current_waypoint < len(waypoints) -1\
+				and ((not info.has_key('150m_warning')) or info["150m_warning"] != current_waypoint):
 					lr = select_next_waypoint()						 # otherwise choose next waypoint
 
 					#lr = get_next_turning_info()
@@ -998,28 +992,28 @@ def speech_timer():
 						if audio_info_on:
 							d = format_audio_number(int(info['dist']))
 							audio.say("In %s Metern %s abbiegen." % (d,dir))
-					info['150m_warning'] = True
-			elif info.has_key('dist') and (info['dist'] <= 40.): # Waypoint reached
-				if current_waypoint == len(waypoints) -1 :		 # this may be the destination itself
+					info['150m_warning'] = current_waypoint
+			elif info.has_key('dist') and (info['dist'] <= 40.)\
+				 and current_waypoint == len(waypoints) -1 :	# waypoint reached, this may be the destination itself
 					if audio_info_on: audio.say("Du bist am Ziel angekommen.")
 					current_waypoint = None   # stop navigation
 					del info['dist']		# clear distance value
-				elif current_waypoint < len(waypoints) -1:
-					#new_direction = select_next_waypoint()						 # otherwise choose next waypoint
-					#if audio_info_on: audio.say("Du hast einen Wegpunkt erreicht.")
-					## comment on this : Since we navigate only to waypoints
-					## with a changing routing direction, every next
-					## step has to be announced as turning point except
-					## the last one
-					#if current_waypoint != len(waypoints) -1 and new_direction != None:
-						#if audio_info_on:
-							#if new_direction > 0.:
-								#audio.say("Abbiegung rechts !")
-							#elif new_direction < 0.:
-								#audio.say("Abbiegung links !")
+				#elif current_waypoint < len(waypoints) -1:
+					##new_direction = select_next_waypoint()						 # otherwise choose next waypoint
+					##if audio_info_on: audio.say("Du hast einen Wegpunkt erreicht.")
+					### comment on this : Since we navigate only to waypoints
+					### with a changing routing direction, every next
+					### step has to be announced as turning point except
+					### the last one
+					##if current_waypoint != len(waypoints) -1 and new_direction != None:
+						##if audio_info_on:
+							##if new_direction > 0.:
+								##audio.say("Abbiegung rechts !")
+							##elif new_direction < 0.:
+								##audio.say("Abbiegung links !")
 
-					try: del info['150m_warning']
-					except: pass
+					#try: del info['150m_warning']
+					#except: pass
 
 			# alert when direction is totally wrong and distance from last point is larger than 40m
 			elif audio_info_on and info.has_key('speed_avg') and info['speed_avg'].items > 0 \
