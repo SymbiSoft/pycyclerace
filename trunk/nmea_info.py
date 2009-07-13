@@ -980,9 +980,10 @@ def speech_timer():
 	while going > 0 and current_waypoint != None:
 		try:
 			# approaching waypoint
-			if info.has_key('dist') and (info['dist'] < 150.) and (info['dist'] > 40.)\
+			if info.has_key('dist') and (info['dist'] < 150.)\
 				and current_waypoint < len(waypoints) -1\
 				and ((not info.has_key('150m_warning')) or info["150m_warning"] != current_waypoint):
+					dist_to_next_wp = int(info['dist'])
 					lr = select_next_waypoint()						 # otherwise choose next waypoint
 
 					#lr = get_next_turning_info()
@@ -990,7 +991,7 @@ def speech_timer():
 						dir = "rechts"
 						if lr < 0.:	dir = "links"
 						if audio_info_on:
-							d = format_audio_number(int(info['dist']))
+							d = format_audio_number(dist_to_next_wp)
 							audio.say("In %s Metern %s abbiegen." % (d,dir))
 					info['150m_warning'] = current_waypoint
 			elif info.has_key('dist') and (info['dist'] <= 40.)\
