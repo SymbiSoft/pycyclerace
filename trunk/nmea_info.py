@@ -989,6 +989,7 @@ def speech_timer():
 				and current_waypoint < len(waypoints) -1\
 				and ((not info.has_key('150m_warning')) or info["150m_warning"] != current_waypoint):
 					dist_to_next_wp = int(info['dist'])
+					info['150m_warning'] = current_waypoint # important: set this value here, because current_waypoint is chnaged in the next line
 					lr, p2p = select_next_waypoint()						 # otherwise choose next waypoint
 					if lr != None:
 						dir = "rechts"
@@ -1003,7 +1004,7 @@ def speech_timer():
 									if lrn < 0.:	dir = "links"
 									p2pd = format_audio_number(int(p2p))
 									audio.say("Danach in %s Metern %s." % (p2pd,dir))
-					info['150m_warning'] = current_waypoint
+
 
 			elif info.has_key('dist') and (info['dist'] <= 40.)\
 				 and current_waypoint == len(waypoints) -1 :	# waypoint reached, this may be the destination itself
