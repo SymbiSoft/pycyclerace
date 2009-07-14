@@ -769,11 +769,13 @@ def select_closest_waypoint():
 	appuifw.note(u"Closest waypoint is %d." % current_waypoint, 'info')
 	return
 
-def get_next_turning_info():
+def get_next_turning_info(assume_on_track = False):
 	"""Computes the angle between the direction towards the next
 	waypoint and the direction to next but one waypoint.
 	Return an angle > 0. when the turning direction is right
-	and < 0. if it is left """
+	and < 0. if it is left
+	assume_on_track = True means the moving direction is computed
+	from the track not from measured data"""
 	global current_waypoint
 	global waypoints
 
@@ -783,7 +785,7 @@ def get_next_turning_info():
 	start = waypoints[current_waypoint]
 
 	old_direction = None
-	if info.has_key('avg_heading'): # use moving direction if present
+	if not assume_on_track and info.has_key('avg_heading'): # use moving direction if present
 		old_direction = info['avg_heading']
 	else:
 		if current_waypoint > 0:
@@ -824,6 +826,7 @@ def select_next_waypoint():
 
 	first_direction = None
 	mean_direction = None
+	p2p_dist = 0.0
 	selection = None
 	if len(waypoints) > current_waypoint + 1 :
 		for w in range(current_waypoint+1, len(waypoints)):
@@ -840,10 +843,12 @@ def select_next_waypoint():
 			if first_direction == None:						# save the direction
 				first_direction = direction
 				mean_direction = direction
+				p2p_dist = distance
 			else:
 				if abs(mean_direction - direction) < userpref['min_direction_difference']  :   # if directions differ only by max. 10 degrees
 					mean_direction += direction		# compute the mean value
 					mean_direction /= 2
+					p2p_dist += distance
 					continue						# and check the next waypoint
 				else:
 					selection = w - 1				# else save the last waypoint which lies on a straight line to the waypoint we where last
@@ -863,9 +868,9 @@ def select_next_waypoint():
 			diff = old_direction - mean_direction
 			if diff < 0 : diff += 360
 			if abs(diff) > userpref['min_direction_difference']:
-				return diff - 180. # if > 0 turn right, else left
+				return diff - 180., p2p_dist # if > 0 turn right, else left
 
-	return None # nothing done
+	return None, None # nothing done
 
 #def select_next_waypoint():
 	#"""Searches the next upcoming waypoint which can be reached on a straight
@@ -984,16 +989,22 @@ def speech_timer():
 				and current_waypoint < len(waypoints) -1\
 				and ((not info.has_key('150m_warning')) or info["150m_warning"] != current_waypoint):
 					dist_to_next_wp = int(info['dist'])
-					lr = select_next_waypoint()						 # otherwise choose next waypoint
-
-					#lr = get_next_turning_info()
+					lr, p2p = select_next_waypoint()						 # otherwise choose next waypoint
 					if lr != None:
 						dir = "rechts"
 						if lr < 0.:	dir = "links"
 						if audio_info_on:
 							d = format_audio_number(dist_to_next_wp)
 							audio.say("In %s Metern %s abbiegen." % (d,dir))
+							if (p2p < 150.):
+								lnr = get_next_turning_info()
+								if lrn != None:
+									dir = "rechts"
+									if lrn < 0.:	dir = "links"
+									p2pd = format_audio_number(int(p2p))
+									audio.say("Danach in %s Metern %s." % (p2pd,dir))
 					info['150m_warning'] = current_waypoint
+
 			elif info.has_key('dist') and (info['dist'] <= 40.)\
 				 and current_waypoint == len(waypoints) -1 :	# waypoint reached, this may be the destination itself
 					if audio_info_on: audio.say("Du bist am Ziel angekommen.")
@@ -3192,8 +3203,6 @@ def touch_up_logactions_cb(pos=(0, 0)):
 	if touch.has_key('down'):
 		if touch['down'] == 0:
 			pick_new_file()
-		#elif touch['down'] == 1:
-			#pass
 		elif touch['down'] == 1:
 			files = get_file_list(subfolder='logs\\')
 			if len(files) > 0:
@@ -3205,7 +3214,7 @@ def touch_up_logactions_cb(pos=(0, 0)):
 						else:
 							fn = userpref['base_dir'] +'logs\\'+ files[j]
 						os.remove(fn)
-						#appuifw.note(u"Deleting %s." % files[j], "info");
+						appuifw.note(u"Deleting %s." % fn, "info");
 			else:
 				appuifw.note(u"No log files found.", "info");
 		else:
