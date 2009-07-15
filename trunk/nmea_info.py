@@ -998,7 +998,7 @@ def speech_timer():
 							d = format_audio_number(dist_to_next_wp)
 							audio.say("In %s Metern %s abbiegen." % (d,dir))
 							if (p2p < 150.):
-								lnr = get_next_turning_info()
+								lrn = get_next_turning_info()
 								if lrn != None:
 									dir = "rechts"
 									if lrn < 0.:	dir = "links"
