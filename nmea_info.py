@@ -584,14 +584,13 @@ def format_audio_number(value):
 	message = ''
 	if len(parts[0]) > 0 and len(parts) < 5:
 		if len(parts[0]) == 4:
-			if not parts[0][0] in ' 1' :
-				message += parts[0][0]
-			if parts[0][0] != ' ' :
-				 message += 'tausend '
+			if not parts[0][0] in ' 1' :	message += parts[0][0]
+			if parts[0][0] != ' ' :			message += 'tausend '
 			parts[0] = parts[0][1:]
 
 		if len(parts[0]) == 3:
-			message += parts[0][0] + 'hundert '
+			if not parts[0][0] in ' 1':	message += parts[0][0]
+			message += 'hundert '
 			parts[0] = parts[0][1:]
 
 		if len(parts[0]) == 2:
@@ -607,7 +606,8 @@ def format_audio_number(value):
 				if parts[0][0] == '8': message += "achtzehn"
 				if parts[0][0] == '9': message += "neunzehn"
 			elif parts[0][1] != '0':
-				message += parts[0][1] + 'und '
+				if parts[0][1] == '1':	message += "ein und "
+				else:					message += parts[0][1] + 'und '
 				if parts[0][0] == '2': message += 'zwanzig'
 				if parts[0][0] == '3': message += 'dreissig'
 				if parts[0][0] == '4': message += 'vierzig'
@@ -984,8 +984,9 @@ def speech_timer():
 
 	while going > 0 and current_waypoint != None:
 		try:
+			warning_dist = 100.
 			# approaching waypoint
-			if info.has_key('dist') and (info['dist'] < 150.)\
+			if info.has_key('dist') and (info['dist'] < warning_dist)\
 				and current_waypoint < len(waypoints) -1\
 				and ((not info.has_key('150m_warning')) or info["150m_warning"] != current_waypoint):
 					dist_to_next_wp = int(info['dist'])
@@ -997,13 +998,13 @@ def speech_timer():
 						if audio_info_on:
 							d = format_audio_number(dist_to_next_wp)
 							audio.say("In %s Metern %s abbiegen." % (d,dir))
-							if (p2p < 150.):
-								lrn = get_next_turning_info()
+							if (p2p < warning_dist):
+								lrn = get_next_turning_info(assume_on_track=True)
 								if lrn != None:
 									dir = "rechts"
 									if lrn < 0.:	dir = "links"
 									p2pd = format_audio_number(int(p2p))
-									audio.say("Danach in %s Metern %s." % (p2pd,dir))
+									audio.say("Dann nach %s Metern %s." % (p2pd,dir))
 
 
 			elif info.has_key('dist') and (info['dist'] <= 40.)\
