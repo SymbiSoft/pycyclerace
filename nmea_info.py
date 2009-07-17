@@ -769,7 +769,7 @@ def select_closest_waypoint():
 	appuifw.note(u"Closest waypoint is %d." % current_waypoint, 'info')
 	return
 
-def get_next_turning_info(assume_on_track = False):
+def get_next_turning_info(assume_on_track = False, starting_point = None):
 	"""Computes the angle between the direction towards the next
 	waypoint and the direction to next but one waypoint.
 	Return an angle > 0. when the turning direction is right
@@ -779,10 +779,11 @@ def get_next_turning_info(assume_on_track = False):
 	global current_waypoint
 	global waypoints
 
-	if current_waypoint == None:
-		return None
-
-	start = waypoints[current_waypoint]
+	if starting_point != None:
+		start = waypoints[starting_point]
+	else:
+		if current_waypoint == None:return None
+		start = waypoints[current_waypoint]
 
 	old_direction = None
 	if not assume_on_track and info.has_key('avg_heading'): # use moving direction if present
@@ -872,65 +873,6 @@ def select_next_waypoint():
 
 	return None, None # nothing done
 
-#def select_next_waypoint():
-	#"""Searches the next upcoming waypoint which can be reached on a straight
-	#line and returns the direction which has to be chosen at the
-	#actual GPS position """
-	#global current_waypoint
-	#global waypoints
-
-	#start = waypoints[current_waypoint]
-
-	#old_direction = None
-	#if info.has_key('avg_heading'): # use moving direction if present
-		#old_direction = info['avg_heading']
-	#elif current_waypoint > 0:
-		#last = waypoints[current_waypoint - 1]
-		#dist = calculate_distance_and_bearing(last[1],last[2], start[1],start[2])
-		#distance, old_direction = dist_tupel_to_floats(dist)
-
-	#first_direction = None
-	#mean_direction = None
-	#selection = None
-	#if len(waypoints) > current_waypoint + 1 :
-		#for w in range(current_waypoint+1, len(waypoints)):
-			#tmp1 = waypoints[w-1]
-			#tmp2 = waypoints[w]
-			#dist = calculate_distance_and_bearing(tmp1[1], tmp1[2], tmp2[1], tmp2[2])
-			#distance, direction = dist_tupel_to_floats(dist)
-
-			## if this is the last waypoint and loop did not break, then select this one
-			#if w == len(waypoints) -1:
-				#selection = w
-				#break
-
-			#if first_direction == None:						# save the direction
-				#first_direction = direction
-				#mean_direction = direction
-			#else:
-				#if abs(mean_direction - direction) < userpref['min_direction_difference']  :   # if directions differ only by max. 10 degrees
-					#mean_direction += direction		# compute the mean value
-					#mean_direction /= 2
-					#continue						# and check the next waypoint
-				#else:
-					#selection = w - 1				# else save the last waypoint which lies on a straight line to the waypoint we where last
-					#break
-
-		#if selection:
-			#current_waypoint = selection
-		#else: # not found any matching waypoint, must take the next point
-			#current_waypoint += 1
-
-		#compute_positional_data() # update direction info
-
-		## return direction difference only, when it is greater then the threshold value
-		#if old_direction != None and mean_direction != None:# and diff > pref['min_direction_difference']:
-			#diff = old_direction - mean_direction
-			#if diff < 0 : diff += 360
-			#if abs(diff) > userpref['min_direction_difference']:
-				#return diff - 180. # if > 0 turn right, else left
-
-	#return None # nothing done#~
 
 def select_prev_waypoint():
 	"""Searches the next upcoming waypoint which can be reached on a straight
@@ -992,19 +934,20 @@ def speech_timer():
 					dist_to_next_wp = int(info['dist'])
 					info['150m_warning'] = current_waypoint # important: set this value here, because current_waypoint is chnaged in the next line
 					lr, p2p = select_next_waypoint()						 # otherwise choose next waypoint
-					if lr != None:
+					if lr != None and audio_info_on:
 						dir = "rechts"
 						if lr < 0.:	dir = "links"
-						if audio_info_on:
-							d = format_audio_number(dist_to_next_wp)
-							audio.say("In %s Metern %s abbiegen." % (d,dir))
-							if (p2p < warning_dist):
-								lrn = get_next_turning_info(assume_on_track=True)
-								if lrn != None:
-									dir = "rechts"
-									if lrn < 0.:	dir = "links"
-									p2pd = format_audio_number(int(p2p))
-									audio.say("Dann nach %s Metern %s." % (p2pd,dir))
+						d = format_audio_number(dist_to_next_wp)
+						msg = u"In %s Metern %s abbiegen." % (d,dir)
+						if (p2p < warning_dist):
+							lrn = get_next_turning_info(assume_on_track=True)
+							if lrn != None:
+								dir = u"rechts"
+								if lrn < 0.:	dir = u"links"
+								p2pd = format_audio_number(int(p2p))
+								msg += u"Dann nach %s Metern %s." % (p2pd,dir)
+								lr, p2p = select_next_waypoint()# don't warn for this point again
+						audio.say(msg);
 
 
 			elif info.has_key('dist') and (info['dist'] <= 40.)\
