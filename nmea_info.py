@@ -514,6 +514,8 @@ if not os.path.exists(userpref['base_dir']):
 # make sure the logging dir exists
 if not os.path.exists(userpref['base_dir']+'logs\\'):
 	os.makedirs(userpref['base_dir']+ 'logs\\')
+if not os.path.exists(userpref['base_dir']+'gpx\\'):
+	os.makedirs(userpref['base_dir']+ 'gpx\\')
 #############################################################################
 
 class mean_value:
@@ -804,8 +806,8 @@ def get_next_turning_info(assume_on_track = False, starting_point = None):
 	if old_direction != None and new_direction != None:
 		diff = old_direction - new_direction
 		if diff < 0 : diff += 360
-		if abs(diff) > userpref['min_direction_difference']:
-			return diff - 180. # if > 0 turn right, else left
+		#if abs(diff) > userpref['min_direction_difference']:
+		return diff - 180. # if > 0 turn right, else left
 	return None
 
 def select_next_waypoint():
@@ -860,16 +862,14 @@ def select_next_waypoint():
 		else: # not found any matching waypoint, must take the next point
 			current_waypoint += 1
 
-
-
 		compute_positional_data() # update direction info
 
 		# return direction difference only, when it is greater then the threshold value
 		if old_direction != None and mean_direction != None:
 			diff = old_direction - mean_direction
 			if diff < 0 : diff += 360
-			if abs(diff) > userpref['min_direction_difference']:
-				return diff - 180., p2p_dist # if > 0 turn right, else left
+			#if abs(diff) > userpref['min_direction_difference']:
+			return diff - 180., p2p_dist # if > 0 turn right, else left
 
 	return None, None # nothing done
 
@@ -924,6 +924,15 @@ def speech_timer():
 	global waypoints, current_waypoint
 	global userpref
 
+	def get_dir(val):
+		if not val or abs(val) < 20.: return None
+		dir = u"rechts"
+		if val < 0.:		dir = u"links"
+		if abs(val) < 55: 	dir = u"leicht " + dir
+		elif abs(val) > 90 and abs(val) <= 150: 	dir = u"hart " + dir
+		elif abs(val) > 150: 	dir = u"krass " + dir
+		return dir
+
 	while going > 0 and current_waypoint != None:
 		try:
 			warning_dist = 100.
@@ -935,18 +944,18 @@ def speech_timer():
 					info['150m_warning'] = current_waypoint # important: set this value here, because current_waypoint is chnaged in the next line
 					lr, p2p = select_next_waypoint()						 # otherwise choose next waypoint
 					if lr != None and audio_info_on:
-						dir = "rechts"
-						if lr < 0.:	dir = "links"
-						d = format_audio_number(dist_to_next_wp)
-						msg = u"In %s Metern %s abbiegen." % (d,dir)
-						if (p2p < warning_dist):
-							lrn = get_next_turning_info(assume_on_track=True)
-							if lrn != None:
-								dir = u"rechts"
-								if lrn < 0.:	dir = u"links"
-								p2pd = format_audio_number(int(p2p))
-								msg += u"Dann nach %s Metern %s." % (p2pd,dir)
-								lr, p2p = select_next_waypoint()# don't warn for this point again
+						dir = get_dir(lr)
+						msg = u""
+						if dir:
+							d = format_audio_number(dist_to_next_wp)
+							msg = u"In %s Metern %s abbiegen." % (d,dir)
+							if (p2p < warning_dist):
+								lrn = get_next_turning_info(assume_on_track=True)
+								dir = get_dir(lrn)
+								if dir:
+									p2pd = format_audio_number(int(p2p))
+									msg += u"Dann nach %s Metern %s." % (p2pd,dir)
+									lr, p2p = select_next_waypoint()# don't warn for this point again
 						audio.say(msg);
 
 
@@ -1090,24 +1099,38 @@ def load_destination_db():
 
 	return list
 
-def import_gpx_track():
+def import_gpx_track(filename=None):
 	global waypoints
 	global current_waypoint
 
 	# import gpx_tracks
-	gpx_file_name = userpref['base_dir'] + "track.gpx"
-	if not os.path.exists(gpx_file_name):
-		# First up, go with the default
-		waypoints = []
-		waypoints.append( (pref['direction_of_name'],pref['direction_of_lat'],pref['direction_of_long']) )
-		return False
+	if filename == None:
+		if not userpref['base_dir'].endswith('\\'):
+			gpx_file_name = userpref['base_dir'] + '\\gpx\\track.gpx'
+		else:
+			gpx_file_name = userpref['base_dir'] +'gpx\\track.gpx'
+	else:
+		gpx_file_name = filename
+
+	if not os.path.exists(gpx_file_name): return False
+
+	#clear all waypoints
+	if len(waypoints) > 0 : del waypoints[:]
 
 	file = open(gpx_file_name, "r")
 	lines = file.readlines()
 	file.close()
 
-	counter = 0
+	trackpt = []
+	# find all trackpoint tags
 	for l in lines:
+		l = l.replace("<trkpt", "\n<trkpt")
+		s = l.split('\n')
+		for i in s:	trackpt.append(i)
+	del lines
+
+	counter = 0
+	for l in trackpt:
 		l = l.strip()
 		if l.strip().startswith('<trkpt'):
 			# example line: <trkpt lat="52.51375280" lon="13.45492600">
@@ -1126,7 +1149,7 @@ def import_gpx_track():
 				add_waypoint(desc, lat, lon)
 			waypoints.append( (desc,lat,lon) )
 
-	del lines
+	del trackpt
 	current_waypoint = 0
 	appuifw.note(u'Gpx track imported : %d waypoints.'% (len(waypoints)),"info")
 
@@ -1155,14 +1178,15 @@ def import_gpx_track():
 #	map_img = Image.open(fname)
 
 	return True
-	#file = open("track.csv", "w")
-	#for w in waypoints:
-		#print w
-		#file.write("%s\t%s\t%s\n" % (w[0], w[1], w[2]))
-	#file.close()
 
 # Load our direction-of waypoints
-if not import_gpx_track(): appuifw.note(u"Could not load track", "error")
+if not import_gpx_track():
+	# First up, go with the default
+	waypoints = []
+	waypoints.append( (pref['direction_of_name'],pref['direction_of_lat'],pref['direction_of_long']) )
+
+	appuifw.note(u"Could not load track", "error")
+
 waypoints_xy = Track(waypoints)
 
 #############################################################################
@@ -3084,8 +3108,23 @@ def touch_up_destination_cb(pos=(0, 0)):
 					current_state = 'track'
 			else:
 				appuifw.note(u"No log files found.", "info");
-		elif touch['down'] == 4:
-			appuifw.note(u"Not implemented yet.", "info");
+		elif touch['down'] == 4: # load from gpx
+			files = get_file_list(subfolder='gpx\\')
+			if len(files) > 0:
+				i=appuifw.selection_list(files, search_field=1)
+				if i > -1:
+					if not userpref['base_dir'].endswith('\\'):
+						fn = userpref['base_dir'] + '\\gpx\\' + files[i]
+					else:
+						fn = userpref['base_dir'] +'gpx\\'+ files[i]
+					if import_gpx_track(fn):
+						if len(waypoints) > 0:	current_waypoint = 0
+						else: current_waypoint = None
+						current_state = 'track'
+			else:
+				appuifw.note(u"No gpx files found.", "info");
+
+			#appuifw.note(u"Not implemented yet.", "info");
 		elif touch['down'] == 5:
 			del waypoints[:]
 			current_waypoint = None
