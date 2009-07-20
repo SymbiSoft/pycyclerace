@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 
 
 __doc__ = """
@@ -53,7 +53,8 @@ from graphics import *
 # All of our preferences live in a dictionary called 'pref'
 pref = {} 			# general settings
 userpref = {} 		# settings free to change by the users
-log_track = None 	# log_file for racking the user's way
+log_track = None 	# log_file for tracking the user's way
+log_speed = None 	# log_file for place, speed values
 audio_info_on = True# if the speaker is eanbled
 waypoints_xy = None	# saves the current track as (x,y) coords
 track_xy = None		# saves the locations the users has passed
@@ -516,6 +517,8 @@ if not os.path.exists(userpref['base_dir']+'logs\\'):
 	os.makedirs(userpref['base_dir']+ 'logs\\')
 if not os.path.exists(userpref['base_dir']+'gpx\\'):
 	os.makedirs(userpref['base_dir']+ 'gpx\\')
+if not os.path.exists(userpref['base_dir']+'maps\\'):
+	os.makedirs(userpref['base_dir']+ 'maps\\')
 #############################################################################
 
 class mean_value:
@@ -523,15 +526,19 @@ class mean_value:
 	def __init__(self, max_values = 10):
 		self.max = max_values
 		self.val = []
+		self.squ = []
 		self.items = 0
 
 	def append(self, value):
 		if self.items < self.max:
 			self.val.append(value)
+			self.squ.append(value*value)
 			self.items += 1
 		else:
 			del self.val[0]
+			del self.squ[0]
 			self.val.append(value)
+			self.squ.append(value*value)
 
 	def mean(self):
 		if self.items == 0: return None
@@ -540,6 +547,14 @@ class mean_value:
 			sum += i
 		sum /= float(self.items)
 		return float(sum)
+
+	def stddev(self):
+		if self.items == 0: return None
+		sum = 0
+		for i in self.squ:	sum += i
+		sum /= float(self.items)
+		mean = self.mean()
+		return float(sum) - mean*mean
 
 	def resize(self, new_max):
 		"Sets a new size for a new max value"
@@ -557,8 +572,8 @@ class mean_value:
 
 
 info = {} # used to store a lot of information
-info['position_lat_avg'] = mean_value(5)
-info['position_long_avg'] = mean_value(5)
+info['position_lat_avg'] = mean_value(10)
+info['position_long_avg'] = mean_value(10)
 info['speed_avg'] = mean_value(20)
 
 def format_distance(value):
@@ -586,8 +601,8 @@ def format_audio_number(value):
 	message = ''
 	if len(parts[0]) > 0 and len(parts) < 5:
 		if len(parts[0]) == 4:
-			if not parts[0][0] in ' 1' :	message += parts[0][0]
-			if parts[0][0] != ' ' :			message += 'tausend '
+			if not parts[0][0] in ' 1': message += parts[0][0]
+			if parts[0][0] != ' ' :		message += 'tausend '
 			parts[0] = parts[0][1:]
 
 		if len(parts[0]) == 3:
@@ -608,8 +623,9 @@ def format_audio_number(value):
 				if parts[0][0] == '8': message += "achtzehn"
 				if parts[0][0] == '9': message += "neunzehn"
 			elif parts[0][1] != '0':
-				if parts[0][1] == '1':	message += "ein und "
-				else:					message += parts[0][1] + 'und '
+				if parts[0][1] == '1': message += "ein"
+				else:				   message += parts[0][1]
+				if parts[0][0] != '0': message +=  "und "
 				if parts[0][0] == '2': message += 'zwanzig'
 				if parts[0][0] == '3': message += 'dreissig'
 				if parts[0][0] == '4': message += 'vierzig'
@@ -771,6 +787,21 @@ def select_closest_waypoint():
 	appuifw.note(u"Closest waypoint is %d." % current_waypoint, 'info')
 	return
 
+def reverse_track():
+	"""Reverses the track and computes the right index of the current
+	waypoint"""
+	global current_waypoint
+	global waypoints
+	waypoints.reverse()
+	old = current_waypoint
+	diff = len(waypoints) - 1 - current_waypoint
+	current_waypoint = diff
+
+def get_direction_difference(old, new):
+	d = abs(old - new)
+	if d > 180 : d = 360 - d
+	return d
+
 def get_next_turning_info(assume_on_track = False, starting_point = None):
 	"""Computes the angle between the direction towards the next
 	waypoint and the direction to next but one waypoint.
@@ -804,10 +835,10 @@ def get_next_turning_info(assume_on_track = False, starting_point = None):
 
 	# return direction difference only, when it is greater then the threshold value
 	if old_direction != None and new_direction != None:
-		diff = old_direction - new_direction
-		if diff < 0 : diff += 360
-		#if abs(diff) > userpref['min_direction_difference']:
-		return diff - 180. # if > 0 turn right, else left
+		diff = new_direction - old_direction
+		if diff < 0   : diff += 360
+		if diff > 180 : diff = -1 * (360 - diff)
+		return diff # if > 0 turn right, else left
 	return None
 
 def select_next_waypoint():
@@ -848,7 +879,8 @@ def select_next_waypoint():
 				mean_direction = direction
 				p2p_dist = distance
 			else:
-				if abs(mean_direction - direction) < userpref['min_direction_difference']  :   # if directions differ only by max. 10 degrees
+				d = get_direction_difference(mean_direction,direction)
+				if d < userpref['min_direction_difference']  :   # if directions differ only by max. 10 degrees
 					mean_direction += direction		# compute the mean value
 					mean_direction /= 2
 					p2p_dist += distance
@@ -857,8 +889,7 @@ def select_next_waypoint():
 					selection = w - 1				# else save the last waypoint which lies on a straight line to the waypoint we where last
 					break
 
-		if selection:
-			current_waypoint = selection
+		if selection: current_waypoint = selection
 		else: # not found any matching waypoint, must take the next point
 			current_waypoint += 1
 
@@ -866,10 +897,10 @@ def select_next_waypoint():
 
 		# return direction difference only, when it is greater then the threshold value
 		if old_direction != None and mean_direction != None:
-			diff = old_direction - mean_direction
-			if diff < 0 : diff += 360
-			#if abs(diff) > userpref['min_direction_difference']:
-			return diff - 180., p2p_dist # if > 0 turn right, else left
+			diff = mean_direction - old_direction
+			if diff < 0   : diff += 360
+			if diff > 180 : diff = -1 * (360 - diff)
+			return diff, p2p_dist # if > 0 turn right, else left
 
 	return None, None # nothing done
 
@@ -878,44 +909,10 @@ def select_prev_waypoint():
 	"""Searches the next upcoming waypoint which can be reached on a straight
 	line and returns the direction which has to be chosen at the
 	actual GPS position """
-	global current_waypoint
-	global waypoints
-
-	first_direction = None
-	mean_direction = None
-	selection = None
-	if current_waypoint > 0:
-		for w in range(current_waypoint-1, 0, -1):
-			tmp1 = waypoints[w+1]
-			tmp2 = waypoints[w]
-			dist = calculate_distance_and_bearing(tmp1[1], tmp1[2], tmp2[1], tmp2[2])
-			distance, direction = dist_tupel_to_floats(dist)
-
-			# if this is the first waypoint and loop did not break, then select this one
-			if w == 0:
-				selection = w
-				break
-
-			if first_direction == None:						# save the direction
-				first_direction = direction
-				mean_direction = direction
-			else:
-				if abs(mean_direction - direction) < userpref['min_direction_difference']  :   # if directions differ only by max. 10 degrees
-					mean_direction += direction		# compute the mean value
-					mean_direction /= 2
-					continue						# and check the next waypoint
-				else:
-					selection = w + 1				# else save the last waypoint which lies on a straight line to the waypoint we where last
-					break
-
-		if selection:
-			current_waypoint = selection
-		else: # not found any matching waypoint, must take the next point
-			current_waypoint -= 1
-
-		compute_positional_data() # update direction info
-
-	return None # nothing done
+	reverse_track()
+	dir, dist = select_next_waypoint()
+	reverse_track()
+	return dir
 
 def speech_timer():
 	"Function for the speech timer - informs the user of important data. Runs as seperate thread, otherwise the application crashes - why that ?"
@@ -928,9 +925,9 @@ def speech_timer():
 		if not val or abs(val) < 20.: return None
 		dir = u"rechts"
 		if val < 0.:		dir = u"links"
-		if abs(val) < 55: 	dir = u"leicht " + dir
-		elif abs(val) > 90 and abs(val) <= 150: 	dir = u"hart " + dir
-		elif abs(val) > 150: 	dir = u"krass " + dir
+		if   abs(val) < 55.: 						dir = u"leicht " + dir
+		elif abs(val) > 90. and abs(val) <= 150.: 	dir = u"hart " + dir
+		elif abs(val) > 150.: 						dir = u"krass " + dir
 		return dir
 
 	while going > 0 and current_waypoint != None:
@@ -1743,7 +1740,7 @@ def compute_positional_data():
 	global waypoints
 	global current_waypoint
 	global place_of_last_audio_alert
-	global log_track
+	global log_track, log_speed
 
 	if (location['valid'] == 0): return 1 # location was invalid, we have to update the screen
 
@@ -1800,6 +1797,11 @@ def compute_positional_data():
 				else:
 					save_gga_log()
 				info['last_log_time'] = time.time()
+
+			stddev = 0.5 * (info['position_lat_avg'].stddev() + info['position_long_avg'].stddev())
+			speed = info['speed_avg'].mean()
+			speed_dev = info['speed_avg'].stddev()
+			log_speed.log([time.strftime("%d.%m.%Y_%H:%M:%S", time.localtime()), pos[0], pos[1], stddev, speed, speed_dev])
 
 		if not info.has_key('d_last_position'):
 			info['d_last_position'] = info['avg_position']
@@ -2373,14 +2375,10 @@ def touch_up_track_cb(pos=(0, 0)):
 			select_closest_waypoint()
 		elif touch['down'] == 1:
 			select_prev_waypoint()
-			#if current_waypoint > 0: current_waypoint -= 1
 		elif touch['down'] == 2:
 			select_next_waypoint()
 		elif touch['down'] == 3:
-			waypoints.reverse()
-			old = current_waypoint
-			diff = len(waypoints) - 1 - current_waypoint
-			current_waypoint = diff
+			reverse_track()
 			del waypoints_xy # clear all waypoints
 			waypoints_xy = None # they will be computed new
 			appuifw.note(u"current_waypoint : %d () old: %d" % (current_waypoint, old), "info")
@@ -3684,6 +3682,8 @@ if userpref.has_key('logfile'): # load last logfile
 	log_track=LogFile(userpref['base_dir']+'logs\\', 'track', fullname = userpref['logfile'])
 else:
 	log_track=LogFile(userpref['base_dir']+'logs\\', 'track')
+
+log_speed=LogFile(userpref['base_dir'], 'debug')
 
 # Loop while active
 appuifw.app.exit_key_handler = exit_key_pressed
