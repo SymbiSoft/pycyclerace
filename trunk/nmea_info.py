@@ -1801,7 +1801,7 @@ def compute_positional_data():
 			stddev = 0.5 * (info['position_lat_avg'].stddev() + info['position_long_avg'].stddev())
 			speed = info['speed_avg'].mean()
 			speed_dev = info['speed_avg'].stddev()
-			log_speed.log([time.strftime("%d.%m.%Y_%H:%M:%S", time.localtime()), pos[0], pos[1], stddev, speed, speed_dev])
+			#log_speed.log([time.strftime("%d.%m.%Y_%H:%M:%S", time.localtime()), pos[0], pos[1], stddev, speed, speed_dev])
 
 		if not info.has_key('d_last_position'):
 			info['d_last_position'] = info['avg_position']
@@ -2381,7 +2381,6 @@ def touch_up_track_cb(pos=(0, 0)):
 			reverse_track()
 			del waypoints_xy # clear all waypoints
 			waypoints_xy = None # they will be computed new
-			appuifw.note(u"current_waypoint : %d () old: %d" % (current_waypoint, old), "info")
 		elif touch['down'] == 4:
 			if not track_xy:
 				track_xy = Track(from_file = userpref["logfile"])
@@ -3683,7 +3682,7 @@ if userpref.has_key('logfile'): # load last logfile
 else:
 	log_track=LogFile(userpref['base_dir']+'logs\\', 'track')
 
-log_speed=LogFile(userpref['base_dir'], 'debug')
+#log_speed=LogFile(userpref['base_dir'], 'debug')
 
 # Loop while active
 appuifw.app.exit_key_handler = exit_key_pressed
