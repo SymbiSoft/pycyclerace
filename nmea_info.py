@@ -186,7 +186,7 @@ def initialize_settings():
 	# where approx. 12km/h = 3.3 m/s
 
 	set_value(userpref,'min_direction_difference',10., 'float')  # min. 10 degrees denote a turning point, values below are irgnored, while searching the next turning point
-
+	set_value(userpref, 'skip_passed_waypoints', False, 'bool') # choose closest waypoint on track, always a wp was missed
 	set_value(pref,'use_db', False, 'bool') # save track in db
 
 	return
@@ -575,6 +575,7 @@ info = {} # used to store a lot of information
 info['position_lat_avg'] = mean_value(10)
 info['position_long_avg'] = mean_value(10)
 info['speed_avg'] = mean_value(20)
+info['overall_distance'] = 0.
 
 def format_distance(value):
 	"formats distances humand readable in reasonable units"
@@ -961,23 +962,6 @@ def speech_timer():
 					if audio_info_on: audio.say("Du bist am Ziel angekommen.")
 					current_waypoint = None   # stop navigation
 					del info['dist']		# clear distance value
-				#elif current_waypoint < len(waypoints) -1:
-					##new_direction = select_next_waypoint()						 # otherwise choose next waypoint
-					##if audio_info_on: audio.say("Du hast einen Wegpunkt erreicht.")
-					### comment on this : Since we navigate only to waypoints
-					### with a changing routing direction, every next
-					### step has to be announced as turning point except
-					### the last one
-					##if current_waypoint != len(waypoints) -1 and new_direction != None:
-						##if audio_info_on:
-							##if new_direction > 0.:
-								##audio.say("Abbiegung rechts !")
-							##elif new_direction < 0.:
-								##audio.say("Abbiegung links !")
-
-					#try: del info['150m_warning']
-					#except: pass
-
 			# alert when direction is totally wrong and distance from last point is larger than 40m
 			elif audio_info_on and info.has_key('speed_avg') and info['speed_avg'].items > 0 \
 				and info['speed_avg'].mean() > userpref['minimum_speed_mps'] and info.has_key('proposed_direction') \
@@ -993,7 +977,11 @@ def speech_timer():
 					distance, direction = dist_tupel_to_floats(dist)
 					if distance != None and distance >= userpref['minimum_warning_distance'] :
 						dir = info['proposed_direction']
-						if dir > 40. and dir < 320.: audio_direction_info() # alert if the actual direction is bad
+						diff = info['proposed_direction']
+						if userpref['skip_passed_waypoints'] and diff > 135 and diff < 225 and current_waypoint != len(waypoints)-1: # umdrehen ignorieren
+							select_closest_waypoint()
+						else:
+							if dir > 40. and dir < 320.: audio_direction_info() # alert if the actual direction is bad
 
 			elif audio_info_on and (time.time() - time_last_audio_message) > userpref['audio_info_interval']: # normal audio alert interval
 				audio_info() #
@@ -1182,7 +1170,7 @@ if not import_gpx_track():
 	waypoints = []
 	waypoints.append( (pref['direction_of_name'],pref['direction_of_lat'],pref['direction_of_long']) )
 
-	appuifw.note(u"Could not load track", "error")
+	#appuifw.note(u"Could not load track", "error")
 
 waypoints_xy = Track(waypoints)
 
@@ -1199,7 +1187,6 @@ satellites = {}
 disp_notices = ''
 disp_notices_count = 0
 # Our logging parameters
-log_interval = 0
 debug_log_fh = ''
 gsm_log_fh = ''
 # Photo parameters
@@ -1791,7 +1778,7 @@ def compute_positional_data():
 
 		def do_log(pos):
 			if not info.has_key('last_log_time'): info['last_log_time'] = time.time()
-			if time.time() - info['last_log_time'] > float(log_interval):
+			if time.time() - info['last_log_time'] > float(userpref['log_interval']):
 				if userpref['log_simple']:
 					log_track.log([time.strftime("%d.%m.%Y_%H:%M:%S", time.localtime()), pos[0], pos[1]])
 				else:
@@ -1811,6 +1798,7 @@ def compute_positional_data():
 			except : res = None
 
 			dist, dir = dist_tupel_to_floats(res)
+
 			if dist > 2. * userpref['minimum_warning_distance']:
 				info['d_distance'] = dist
 				info['d_heading']  = dir
@@ -1819,6 +1807,7 @@ def compute_positional_data():
 					info['proposed_direction'] = info['d_heading'] - info['bearing']
 					if info['proposed_direction'] < 0. : info['proposed_direction'] += 360
 
+				info['overall_distance'] += dist # add to the distance
 				do_log(info['avg_position'])# log the track to a file
 
 	# moving average of speed
@@ -1854,7 +1843,6 @@ def exit_key_pressed():
 	lock.signal()
 
 def callback(event):
-	global log_interval
 	global current_waypoint
 	global waypoints
 	global current_state
@@ -2038,7 +2026,6 @@ def draw_main():
 	global motion
 	global satellites
 	global gps
-	global log_interval
 	global disp_notices
 	global disp_notices_count
 	global touch, current_state
@@ -2191,11 +2178,11 @@ def draw_main():
 	yPos += int(line_spacing*0.5)
 
 	yPos += line_spacing
-	if log_interval > 0:
+	if userpref['log_interval'] > 0:
 		myscreen.text( (13, yPos), u'Logging', 0x008000, font)
 
 		yPos += line_spacing
-		logging = unicode(log_interval) + u' secs'
+		logging = unicode(userpref['log_interval']) + u' secs'
 		if pref['gsmloc_logging']:
 			logging = logging + u' +GSM'
 		myscreen.text( (13,yPos), logging, font=font)
@@ -2238,6 +2225,11 @@ def draw_main():
 	else:
 		myscreen.text( (mid+13,yPos+ small_line_spacing), u'(no heading)', font=font)
 
+	yPos += 2 * line_spacing
+	if info.has_key('overall_distance') and info['overall_distance'] != None:
+		d = format_distance(info['overall_distance'])
+		myscreen.text( (13,yPos), u'total: %s' % d, font='normal')
+
 	if not disp_notices == '':
 		yPos = left_box_bottom + line_spacing
 		myscreen.text( (0,yPos), unicode(disp_notices), 0x000080, font)
@@ -2245,6 +2237,7 @@ def draw_main():
 		if disp_notices_count > 60:
 			disp_notices = ''
 			disp_notices_count = 0
+
 	canvas.blit(myscreen) # show the image on the screen
 
 	# bind the tapping areas
@@ -2257,7 +2250,6 @@ def draw_details():
 	global motion
 	global satellites
 	global gps
-	global log_interval
 	global disp_notices
 	global disp_notices_count
 
@@ -2340,8 +2332,8 @@ def draw_details():
 
 	yPos += (line_spacing*2)
 	canvas.text( (0, yPos), u'Logging locations', 0x008000, font)
-	if log_interval > 0:
-		logging = unicode(log_interval) + u' secs'
+	if userpref['log_interval'] > 0:
+		logging = unicode(userpref['log_interval']) + u' secs'
 	else:
 		logging = u'no'
 	if pref['gsmloc_logging']:
