@@ -507,6 +507,7 @@ if not appuifw.touch_enabled():
 # Set the screen size, and title
 appuifw.app.screen=pref['app_screen']
 appuifw.app.title=unicode(pref['app_title'])
+appuifw.app.directional_pad = False
 
 # Ensure our data directory exists
 if not os.path.exists(userpref['base_dir']):
